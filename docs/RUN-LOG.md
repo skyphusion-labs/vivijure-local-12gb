@@ -131,3 +131,20 @@ Flagged for Conrad; no paid GPU spun up.
    tier->engine numbers (resolution/frames/steps ceilings). NOT executed. Costed plan in
    docs/live-benchmark-plan.md, flagged for Conrad.
 </invoke>
+
+---
+
+## Final status (session close)
+
+- Module PR (the local-consumer door, vivijure repo): https://github.com/skyphusion-labs/vivijure/pull/380
+  (branch rollins/local-gpu-motion-backend, under skyphusion-rollins). Full vivijure suite green
+  (1074 pass), typecheck clean, #124 tier-drift guard intact.
+- Backend engine: committed locally on `main` in /home/rollins/dev/vivijure-local-backend (33/33 CPU
+  tests green, py_compile clean). NOT pushed to a remote yet: repo topology (new repo vs a consumer
+  profile inside vivijure-backend) is a flagged LEAD decision -- I did not create an org repo
+  unilaterally. To publish once Mackaye/Conrad confirm topology:
+    sudo -u rollins env -u GITHUB_TOKEN gh repo create skyphusion-labs/vivijure-local-backend \
+      --private --source /home/rollins/dev/vivijure-local-backend --remote origin --push
+- Spend gate: HONORED. No paid GPU spun up. The live LTX benchmark is costed + flagged in
+  docs/live-benchmark-plan.md (~2-4 GPU-hrs, ~$1-5 on RunPod RTX 2000 Ada 16GB, or $0 on Conrad's own
+  4060 Ti).
