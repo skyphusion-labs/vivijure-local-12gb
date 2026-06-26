@@ -1,0 +1,98 @@
+"""Pure VRAM budgeting for the 16GB door.
+
+A coarse, HONEST first-order estimator of whether an i2v config fits a card, and which offload mode it
+needs. It is deliberately conservative (it would rather recommend more offload than OOM a user's only
+GPU), and it is PURE -- no torch, no CUDA -- so it unit-tests on a CPU box and so the server can refuse
+or down-shift a job BEFORE loading a model and discovering the OOM the hard way.
+
+These coefficients are rough published/community figures (see docs/i2v-model-selection.md), not
+measured on the card. The live benchmark (docs/live-benchmark-plan.md) replaces them with real peak
+numbers; until then the estimator's job is to keep the card from OOMing, not to be exact.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from .config import I2VConfig, Offload
+
+# The design floor. Conrad DECIDED: RTX 4060 Ti 16GB is the minimum; bigger cards just get headroom.
+FLOOR_VRAM_GB = 16.0
+
+# A slice of VRAM the driver / CUDA context / cuDNN workspaces / allocator fragmentation always hold.
+# Never available to the model. Set conservatively (PyTorch fragmentation alone routinely strands 1-2GB
+# on a card this size), because the cost of being wrong here is OOMing a user's only GPU.
+RESERVED_GB = 2.0
+
+# Rough resident weight footprint per LTX variant, by the precision it loads at. Community/published
+# order-of-magnitude figures, not measured here, rounded UP (a model that reports "~13GB at fp8" needs
+# headroom for activation spikes, so the budgeter treats it as heavier so it never picks NONE-offload at
+# the edge). The live benchmark replaces these with measured peaks.
+_WEIGHTS_GB = {
+    "Lightricks/LTX-Video-2B-distilled": 5.0,            # 2B at fp16/bf16
+    "Lightricks/LTX-Video-0.9.8-13B-distilled-fp8": 14.0,  # 13B at fp8 (Ada-only): ~13GB + spike margin
+}
+_DEFAULT_WEIGHTS_GB = 6.0  # an unknown variant: assume mid-size so we err toward more offload
+
+# How much each offload mode shaves off the RESIDENT weight cost (the activations cost is separate).
+# model-cpu-offload pages whole submodules; sequential pages per layer (far smaller resident set).
+_OFFLOAD_RESIDENT_FACTOR = {
+    Offload.NONE: 1.0,
+    Offload.MODEL_CPU_OFFLOAD: 0.45,
+    Offload.SEQUENTIAL_CPU_OFFLOAD: 0.18,
+}
+
+
+@dataclass(frozen=True)
+class VramEstimate:
+    """The verdict for one config on one card budget."""
+
+    weights_gb: float
+    activations_gb: float
+    peak_gb: float
+    budget_gb: float       # usable VRAM after the reserved slice
+    fits: bool
+    headroom_gb: float     # budget - peak (negative => predicted OOM)
+
+
+def latent_pixels(cfg: I2VConfig) -> int:
+    """The latent volume that drives activation cost: (W/32) * (H/32) * frames. LTX's spatial
+    compression is 32x and temporal 8x, so the latent grid is the real cost driver, not raw pixels."""
+    return max(1, (cfg.width // 32) * (cfg.height // 32) * max(1, cfg.num_frames))
+
+
+def activations_gb(cfg: I2VConfig) -> float:
+    """A coarse activation/attention working-set estimate. Scales with the latent volume; VAE tiling
+    bounds the (otherwise spiky) decode peak, so it earns a discount. ~0.9 GB per 100k latent units is
+    a conservative placeholder until the benchmark measures it."""
+    raw = latent_pixels(cfg) / 100_000.0 * 0.9
+    return raw * (0.6 if cfg.vae_tiling else 1.0)
+
+
+def estimate(cfg: I2VConfig, *, card_gb: float = FLOOR_VRAM_GB) -> VramEstimate:
+    """Estimate peak VRAM for `cfg` on a `card_gb` card and decide whether it fits."""
+    resident = _WEIGHTS_GB.get(cfg.model, _DEFAULT_WEIGHTS_GB)
+    weights = resident * _OFFLOAD_RESIDENT_FACTOR.get(cfg.offload, 1.0)
+    acts = activations_gb(cfg)
+    peak = weights + acts
+    budget = max(0.0, card_gb - RESERVED_GB)
+    return VramEstimate(
+        weights_gb=round(weights, 2),
+        activations_gb=round(acts, 2),
+        peak_gb=round(peak, 2),
+        budget_gb=round(budget, 2),
+        fits=peak <= budget,
+        headroom_gb=round(budget - peak, 2),
+    )
+
+
+def strongest_offload(cfg: I2VConfig, *, card_gb: float = FLOOR_VRAM_GB) -> Offload:
+    """Pick the WEAKEST offload that still fits `cfg` on the card (weakest = fastest). Walk from NONE
+    toward SEQUENTIAL and return the first that fits; if none fits, return SEQUENTIAL (the smallest
+    footprint) so the caller can still try, and let the estimate's `fits=False` warn honestly."""
+    from dataclasses import replace
+
+    order = [Offload.NONE, Offload.MODEL_CPU_OFFLOAD, Offload.SEQUENTIAL_CPU_OFFLOAD]
+    for mode in order:
+        if estimate(replace(cfg, offload=mode), card_gb=card_gb).fits:
+            return mode
+    return Offload.SEQUENTIAL_CPU_OFFLOAD
