@@ -1,0 +1,34 @@
+{
+  "gpu": "NVIDIA RTX 2000 Ada Generation",
+  "total_vram_gb": 16.7,
+  "host": "2c6f39729bb7",
+  "model": "Lightricks/LTX-Video",
+  "results": [
+    {
+      "point": "draft",
+      "width": 512,
+      "height": 320,
+      "num_frames": 97,
+      "steps": 25,
+      "ok": true,
+      "oom": false,
+      "seconds": 38.6,
+      "peak_vram_gb": 10.44,
+      "fits_16gb": true,
+      "sample": "results/sample_draft.mp4"
+    },
+    {
+      "point": "standard",
+      "width": 704,
+      "height": 512,
+      "num_frames": 121,
+      "steps": 40,
+      "ok": true,
+      "oom": false,
+      "seconds": 125.6,
+      "peak_vram_gb": 10.46,
+      "fits_16gb": true,
+      "sample": "results/sample_standard.mp4"
+    }
+  ]
+}
