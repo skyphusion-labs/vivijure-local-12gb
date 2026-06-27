@@ -170,3 +170,21 @@ deploys as a tag-triggered GHCR image -> RunPod endpoint, so the DEPLOYED image 
 user_email on every artifact. Closed in source, OPEN in production. Remediation: cut backend-v0.2.28 off
 main -> CI image build -> update the RunPod endpoint image. NOT cut by me (a backend release is a deploy;
 the release train is gated this pass). Flagged to Mackaye.
+
+---
+
+## PROOF GATE PASSED (2026-06-27): LTX i2v on the 16GB floor
+
+Live benchmark on RunPod RTX 2000 Ada 16GB (Ada/16GB/fp8 proxy for the 4060 Ti). Engine:
+LTXImageToVideoPipeline + Lightricks/LTX-Video (bf16) + model-cpu-offload + VAE tiling.
+
+- FIT: peak 10.44GB (draft) / 10.46GB (standard) -- fits 16GB, ~6GB headroom, NO OOM.
+- SPEED: draft 512x320/97f/25steps = 38.6s; standard 704x512/121f/40steps = 125.6s. Cold load 39.7s.
+- QUALITY: real sample clips committed at docs/proof/ (sample_draft.mp4, sample_standard.mp4).
+- COST: 4 short pods (env fixes: PEP668 pip flag; T5 tokenizer needed protobuf+tiktoken); ALL
+  auto-deleted (DELETE http 204 each); total < $0.10; verified zero live pods after.
+
+Folded into the engine (commit 3beb8e6): config.py real repo + validated steps/guidance/offload;
+vram.py guardrail; i2v_ltx distilled=False; tests 33/33 green; doc tier tables updated to real numbers.
+Pre-flight catch: scaffold model IDs were placeholders + distilled/13B use a DIFFERENT pipeline class
+(LTXConditionPipeline) -- that path is a quality FOLLOW-UP; the base i2v floor is proven.
