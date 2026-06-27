@@ -188,3 +188,22 @@ Folded into the engine (commit 3beb8e6): config.py real repo + validated steps/g
 vram.py guardrail; i2v_ltx distilled=False; tests 33/33 green; doc tier tables updated to real numbers.
 Pre-flight catch: scaffold model IDs were placeholders + distilled/13B use a DIFFERENT pipeline class
 (LTXConditionPipeline) -- that path is a quality FOLLOW-UP; the base i2v floor is proven.
+
+---
+
+## B plumbing proof PASS + transparent packaging (2026-06-27)
+
+- TASK 1 (transparent + easy): cloudflared bundled in docker-compose (quick tunnel default, named via
+  TUNNEL_TOKEN); backend auto-generates LOCAL_BACKEND_TOKEN; a `ready` service prints a copy-paste
+  banner (Backend URL + token) gated on tunnel-up + health (announce.py). i2v routes HARD-reject
+  untokened requests (503 unset / 401 wrong); /health + selftest open. HOMELABBER.md restructured
+  easy-floor-first. 35/35 green, compose validates.
+- TASK 2 SAFE PROOF = PASS, end to end through a real public TryCloudflare tunnel on a 16GB RTX 2000
+  Ada pod: untokened /run->401, keyframe->R2, /run i2v_clip (exact local-gpu wire body)->poll->COMPLETED
+  (97f@24fps, 4.04s), clip written to + read from shared R2. Clip committed at
+  docs/proof/plumbing_tunnel_clip.mp4. R2 cleanup deleted ONLY the namespaced test objects; pod
+  auto-deleted (204); zero live pods verified. ~$0.15 total session pod spend (5 pods, all torn down).
+- STUDIO FLIP: HELD (ephemeral pod = dead door). Staged as gated draft PRs vivijure#383 (un-exclude
+  local-gpu) + #384 (bind MODULE_LOCAL_GPU), safe order in bodies + INTEGRATION.md. Ready for the
+  weekend one-go flip on a PERSISTENT backend (Conrad's hardware / named tunnel).
+- Follow-ups logged: 13B tier (vivijure-local-backend#1); auto-pairing (no copy-paste) noted.
