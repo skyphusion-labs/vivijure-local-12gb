@@ -32,15 +32,30 @@ server enforces it; unset = open (trusted-LAN tunnel only).
 
 ## The flip checklist (studio side)
 
-1. **Module deploys automatically.** The studio CI (`.github/workflows/ci.yml`) is deploy-by-default:
-   every `modules/*/wrangler.toml` deploys unless its dir is in the explicit `EXCLUDE`. `local-gpu` is
-   NOT excluded, so merging its PR (#380) deploys `vivijure-module-local-gpu`. **No EXCLUDE edit
-   needed** (it was never excluded).
+STATE (as of studio v0.7.7): `local-gpu` is currently **EXCLUDED** from the studio CI deploy (Strummer's
+PR #382 added it to `EXCLUDE` because its `wrangler.toml` binds Secrets-Store secrets that were not yet
+seeded -- an unsatisfiable binding aborted the v0.7.6 deploy), and there is **no** core
+`MODULE_LOCAL_GPU` binding yet. So the flip is a deliberate, ORDERED sequence. Order matters -- verify
+the live studio CI workflow before you run it, and only flip once the backend endpoint is reachable.
 
-2. **Bind it to the core.** Add a service binding to the core `wrangler.toml.example` so the registry
-   discovers `local-gpu` (the registry scans env for `MODULE_*` service bindings). A `[[services]]`
-   binding must point at a DEPLOYED module (else the next core deploy fails on a dangling binding), so
-   add this AFTER step 1 is merged:
+1. **Seed the module secrets FIRST** into the account Cloudflare Secrets Store. This must precede the
+   deploy: `local-gpu`'s `wrangler.toml` binds them by `secret_name`, and `wrangler deploy` FAILS if the
+   store secret does not exist (that is exactly what broke v0.7.6). Same store + flow as the RunPod
+   modules (studio `docs/DEPLOYMENT.md` "Module secrets via the Secrets Store"):
+
+   ```sh
+   # the tunnel hostname terminating at the reachable backend (no trailing slash)
+   wrangler secrets-store secret create <STORE_ID> --name LOCAL_BACKEND_URL   --value "https://render.example"
+   # the shared secret the backend checks (optional; match the backend's .env LOCAL_BACKEND_TOKEN)
+   wrangler secrets-store secret create <STORE_ID> --name LOCAL_BACKEND_TOKEN --value "<openssl rand -hex 32>"
+   ```
+
+2. **Remove `local-gpu` from the studio CI `EXCLUDE`** (`.github/workflows/ci.yml`). With the secrets
+   seeded (step 1) its `wrangler deploy` now succeeds, so `vivijure-module-local-gpu` deploys.
+
+3. **Bind it to the core.** Add a `[[services]]` binding to the core `wrangler.toml.example` so the
+   registry discovers it (the registry scans env for `MODULE_*` service bindings). A `[[services]]`
+   binding must point at a DEPLOYED module (else the core deploy dangles), so do this AFTER step 2:
 
    ```toml
    # Local consumer GPU (LTX-Video on the homelabber's own 16GB card). The local door.
@@ -49,22 +64,14 @@ server enforces it; unset = open (trusted-LAN tunnel only).
    service = "vivijure-module-local-gpu"
    ```
 
-3. **Seed the module secrets** into the account Cloudflare Secrets Store (same store + flow as the
-   RunPod modules; see the studio `docs/DEPLOYMENT.md` "Module secrets via the Secrets Store"). The
-   `local-gpu` `wrangler.toml` binds these by `secret_name`:
+4. **The backend must already be running + reachable** at `LOCAL_BACKEND_URL` (this repo, via a
+   Cloudflare tunnel) BEFORE steps 1-3 make the door user-visible -- a picked door pointing at nothing
+   fails every render. See the repo README run-story + `docker-compose.yml`.
 
-   ```sh
-   # the tunnel hostname terminating at the homelab box (no trailing slash)
-   wrangler secrets-store secret create <STORE_ID> --name LOCAL_BACKEND_URL   --value "https://render.myhomelab.example"
-   # the shared secret the backend checks (optional; match the backend's .env LOCAL_BACKEND_TOKEN)
-   wrangler secrets-store secret create <STORE_ID> --name LOCAL_BACKEND_TOKEN --value "<openssl rand -hex 32>"
-   ```
+5. **Verify a live local-door render** end to end (the door appears in the selector and produces a clip).
 
-4. **The homelabber runs the backend** (this repo) and exposes it via a Cloudflare tunnel; the tunnel
-   hostname is what `LOCAL_BACKEND_URL` points at. See the repo README run-story + `docker-compose.yml`.
-
-Once 1-4 are in place the local door appears in the planner's motion.backend selector (Joan's #379
-selector renders it from the manifest's `ui.locality="local"` framing) and renders end to end.
+Once this sequence completes the local door appears in the planner's motion.backend selector (Joan's
+#379 selector renders it from the manifest's `ui.locality="local"` framing) and renders end to end.
 
 ## Trust boundary (do not break)
 
