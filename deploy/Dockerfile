@@ -3,7 +3,7 @@
 # SCAFFOLD image. torch/torchvision install from the CUDA index matched to the card's driver line; the
 # exact validated pin set is fixed during the card benchmark (docs/live-benchmark-plan.md), mirroring
 # how vivijure-backend pins its pod-validated set. Built to run on the user's own box (a 4060 Ti is Ada
-# / CUDA 12.x), NOT on RunPod.
+# / CUDA 12.x), NOT on RunPod. Run it via docker-compose.yml (one command) or `docker run --gpus all`.
 FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -29,4 +29,10 @@ ENV PYTHONPATH=/app/src \
     PORT=8000
 
 EXPOSE 8000
+
+# Liveness: GET /health must 200. stdlib-only (no curl in the image). Mirrors the compose healthcheck
+# so a bare `docker run` is self-checking too. Generous start-period: first boot pulls LTX weights.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=3 \
+  CMD python3 -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health',timeout=3).status==200 else 1)"
+
 CMD ["python3", "-m", "vivijure_local.server"]

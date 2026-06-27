@@ -14,8 +14,20 @@ tunnel that terminates at the box.
 control plane --> local-gpu module (CF Worker) --/run--> tunnel --> THIS backend (LTX-Video, RTX 4060 Ti 16GB)
 ```
 
-It speaks the IDENTICAL `i2v_clip` job contract as the datacenter backend and shares the same R2
-bucket, so the same control plane drives either door. See [docs/architecture.md](docs/architecture.md).
+## Run it on your own box (one command)
+
+```sh
+cp .env.example .env        # your R2 creds (+ optional LOCAL_BACKEND_TOKEN)
+docker compose up -d        # first start caches the LTX weights, then serves :8000
+curl localhost:8000/health  # {"ok":true,"engine":"ltx-video",...}
+```
+
+Then expose `:8000` over a Cloudflare tunnel and point your studio's `local-gpu` module at it. The full
+homelabber walkthrough (prereqs, tunnel, honest trade-offs, troubleshooting) is
+**[docs/HOMELABBER.md](docs/HOMELABBER.md)**; the studio-side wiring is
+**[docs/INTEGRATION.md](docs/INTEGRATION.md)**.
+
+Needs an NVIDIA GPU (16GB+) + the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html).
 
 ## What it runs
 
@@ -32,13 +44,13 @@ the card's honest ceiling, not datacenter parity.
 | `final` | LTX 13B fp8 distilled | 768x512 | 121 | sequential CPU offload + VAE tiling |
 
 > These are conservative SCAFFOLD defaults. The exact 16GB ceilings + real wall-clock are finalized by
-> the live benchmark ([docs/live-benchmark-plan.md](docs/live-benchmark-plan.md)), which is flagged for
-> Conrad and NOT yet executed (the spend gate).
+> the live benchmark ([docs/live-benchmark-plan.md](docs/live-benchmark-plan.md)) -- the proof gate,
+> scripted in [`scripts/benchmark.py`](scripts/benchmark.py), ready to fire on the card.
 
 ## The job API (RunPod-compatible)
 
-A long-running server (`server.py`) the `local-gpu` module talks to exactly as `own-gpu` talks to
-RunPod:
+A long-running server (`src/vivijure_local/server.py`) the `local-gpu` module talks to exactly as
+`own-gpu` talks to RunPod:
 
 ```
 POST /run          { "input": { action: "i2v_clip", project, shot_id, prompt, keyframe_key?, config } } -> { "id" }
@@ -51,7 +63,7 @@ POST /run { "selftest": true } -> a no-GPU transport probe
 The server owns an in-process serial job registry (a consumer card runs one i2v job at a time), the
 RunPod-lifecycle stand-in for a box with no serverless platform.
 
-## Quickstart (CPU dev: no GPU, no model weights)
+## Develop (CPU: no GPU, no model weights)
 
 ```bash
 python -m venv .venv && . .venv/bin/activate
@@ -64,24 +76,19 @@ The pure logic is CPU-tested and green; the torch/diffusers generation body is d
 validated on the card. The body raises a clear error rather than faking output if the GPU runtime is
 absent -- a producer stage never ships a fake clip.
 
-## Run on the box (GPU)
+## The benchmark (proof gate)
 
-```bash
-pip install -r requirements.txt    # + torch/torchvision from the CUDA index (see deploy/Dockerfile)
-# R2 (shared vivijure bucket) creds + optional token in the env:
-export R2_ACCOUNT_ID=... R2_ACCESS_KEY_ID=... R2_SECRET_ACCESS_KEY=... R2_BUCKET=vivijure
-export LOCAL_BACKEND_TOKEN=...     # optional shared secret the local-gpu module sends
-python -m vivijure_local.server    # serves on :8000
-```
-
-Then expose `:8000` via a Cloudflare tunnel and point the `local-gpu` module's `LOCAL_BACKEND_URL` at
-the tunnel hostname.
+`scripts/benchmark.py` runs the LTX i2v engine across the three tiers on the card, capturing fit (peak
+VRAM / OOM), speed (sec/clip), and a real sample clip per tier, then writes a report. It is **ready to
+fire** the instant the hardware is chosen; it does NOT run without a GPU (the spend gate). See
+[docs/live-benchmark-plan.md](docs/live-benchmark-plan.md) for the costed plan.
 
 ## Security boundary
 
 One credential: the shared-R2 key (read the keyframe, write the clip). Input is control-plane-trusted
-(the module only reaches the box through the studio's service binding). An optional `LOCAL_BACKEND_TOKEN`
-is defense in depth on the tunnel origin. The backend holds no studio secrets and no submitter identity.
+(the module only reaches the box through the studio's service binding + your tunnel). An optional
+`LOCAL_BACKEND_TOKEN` is defense in depth on the tunnel origin. The backend holds no studio secrets and
+no submitter identity.
 
 ## License
 

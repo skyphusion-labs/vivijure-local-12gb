@@ -1,0 +1,56 @@
+# vivijure-local-backend: one-command self-host for a homelabber's 16GB GPU.
+#
+# The whole product promise: "run this on your box, point your vivijure at it." This brings up the
+# LTX-Video i2v render server on YOUR own GPU, caches the model weights on a named volume (so the
+# big pull happens once), and exposes the i2v endpoint the studio's local-gpu module calls.
+#
+# PREREQS (one time on the host):
+#   - an NVIDIA GPU (RTX 4060 Ti 16GB floor) + recent driver
+#   - Docker + the NVIDIA Container Toolkit (so the container sees the GPU):
+#       https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html
+#
+# RUN:
+#   cp .env.example .env      # fill in your R2 creds (+ optional token)
+#   docker compose up -d      # first start pulls LTX weights into the cache volume, then serves :8000
+#   curl localhost:8000/health
+#
+# Then expose :8000 over a Cloudflare tunnel and point the studio's local-gpu module
+# LOCAL_BACKEND_URL at the tunnel hostname (see docs/INTEGRATION.md). That is the entire setup.
+
+services:
+  vivijure-local-backend:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+    image: vivijure-local-backend:local
+    container_name: vivijure-local-backend
+    restart: unless-stopped
+    ports:
+      - "${BIND_ADDR:-127.0.0.1}:8000:8000" # default to localhost; the tunnel terminates here, not the open LAN
+    env_file:
+      - .env
+    environment:
+      HOST: "0.0.0.0"
+      PORT: "8000"
+      HF_HOME: "/models/hf"
+    volumes:
+      - vivijure_models:/models # LTX weights cache: pulled once, reused across restarts/upgrades
+    # GPU passthrough (needs the NVIDIA Container Toolkit on the host). The Compose device-reservation
+    # spec is the portable form; `docker run --gpus all` is the equivalent for a bare run.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      # stdlib-only probe (no curl in the image): GET /health must return 200.
+      test: ["CMD", "python3", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health',timeout=3).status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 120s # the first run pulls weights; give it room before marking unhealthy
+
+volumes:
+  vivijure_models:
