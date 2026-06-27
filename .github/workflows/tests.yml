@@ -12,6 +12,13 @@ on:
     branches: [main]
   pull_request:
 
+# Least-privilege CI token (fork-safety + public-repo hardening): this suite only reads the
+# code and runs pytest -- it never writes the repo, pushes images, or needs any secret. Pinning
+# contents:read caps the GITHUB_TOKEN on push-to-main runs (fork PRs are already read-only +
+# secretless under pull_request). No secrets, no self-hosted runner, no fleet-internal pulls.
+permissions:
+  contents: read
+
 jobs:
   cpu-tests:
     runs-on: ubuntu-latest
