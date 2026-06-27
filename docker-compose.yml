@@ -1,21 +1,22 @@
-# vivijure-local-backend: one-command self-host for a homelabber's 16GB GPU.
+# vivijure-local-backend: one-command self-host for a homelabber's 16GB GPU, WITH its own tunnel.
 #
-# The whole product promise: "run this on your box, point your vivijure at it." This brings up the
-# LTX-Video i2v render server on YOUR own GPU, caches the model weights on a named volume (so the
-# big pull happens once), and exposes the i2v endpoint the studio's local-gpu module calls.
+# `docker compose up` stands up the LTX i2v render server on YOUR GPU AND a Cloudflare tunnel, so you
+# get a studio-reachable PUBLIC https URL with zero extra setup. That URL is your LOCAL_BACKEND_URL.
 #
-# PREREQS (one time on the host):
-#   - an NVIDIA GPU (RTX 4060 Ti 16GB floor) + recent driver
-#   - Docker + the NVIDIA Container Toolkit (so the container sees the GPU):
-#       https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html
+# PREREQS (one time): an NVIDIA GPU (RTX 4060 Ti 16GB floor) + recent driver, Docker, and the NVIDIA
+# Container Toolkit (so the container sees the GPU):
+#   https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html
 #
 # RUN:
-#   cp .env.example .env      # fill in your R2 creds (+ optional token)
-#   docker compose up -d      # first start pulls LTX weights into the cache volume, then serves :8000
-#   curl localhost:8000/health
+#   cp .env.example .env          # (optional) set LOCAL_BACKEND_TOKEN; leave blank to auto-generate one
+#   docker compose up -d
+#   docker compose logs cloudflared            # grab the https://<random>.trycloudflare.com URL
+#   docker compose logs vivijure-local-backend # grab the auto-generated LOCAL_BACKEND_TOKEN (if unset)
+# Feed that URL + token to the studio's local-gpu module (docs/INTEGRATION.md). That's the whole setup.
 #
-# Then expose :8000 over a Cloudflare tunnel and point the studio's local-gpu module
-# LOCAL_BACKEND_URL at the tunnel hostname (see docs/INTEGRATION.md). That is the entire setup.
+# SECURITY: the tunnel is PUBLIC, so the backend HARD-REJECTS any i2v request without the valid
+# LOCAL_BACKEND_TOKEN (a missing/empty token => the i2v endpoint refuses to serve). Never an open
+# GPU-spend endpoint. Keep the token secret; it is the only thing between the public URL and your GPU.
 
 services:
   vivijure-local-backend:
@@ -25,8 +26,8 @@ services:
     image: vivijure-local-backend:local
     container_name: vivijure-local-backend
     restart: unless-stopped
-    ports:
-      - "${BIND_ADDR:-127.0.0.1}:8000:8000" # default to localhost; the tunnel terminates here, not the open LAN
+    expose:
+      - "8000"                      # internal only; cloudflared reaches it over the compose network
     env_file:
       - .env
     environment:
@@ -34,9 +35,22 @@ services:
       PORT: "8000"
       HF_HOME: "/models/hf"
     volumes:
-      - vivijure_models:/models # LTX weights cache: pulled once, reused across restarts/upgrades
-    # GPU passthrough (needs the NVIDIA Container Toolkit on the host). The Compose device-reservation
-    # spec is the portable form; `docker run --gpus all` is the equivalent for a bare run.
+      - vivijure_models:/models      # LTX weights cache: pulled once, reused across restarts/upgrades
+    # Auto-generate a strong LOCAL_BACKEND_TOKEN if the operator did not set one, and print it once so it
+    # can be copied to the studio. Keeps the secure-by-default path frictionless (no open endpoint, no
+    # mandatory pre-step). Set LOCAL_BACKEND_TOKEN in .env for a STABLE token across restarts.
+    command:
+      - sh
+      - -c
+      - >
+        if [ -z "$$LOCAL_BACKEND_TOKEN" ]; then
+          export LOCAL_BACKEND_TOKEN=$$(python3 -c "import secrets; print(secrets.token_hex(24))");
+          echo "================================================================";
+          echo "  GENERATED LOCAL_BACKEND_TOKEN=$$LOCAL_BACKEND_TOKEN";
+          echo "  ^ set this as the studio local-gpu module's LOCAL_BACKEND_TOKEN";
+          echo "================================================================";
+        fi;
+        exec python3 -m vivijure_local.server
     deploy:
       resources:
         reservations:
@@ -45,12 +59,35 @@ services:
               count: all
               capabilities: [gpu]
     healthcheck:
-      # stdlib-only probe (no curl in the image): GET /health must return 200.
       test: ["CMD", "python3", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health',timeout=3).status==200 else 1)"]
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 120s # the first run pulls weights; give it room before marking unhealthy
+      start_period: 120s
+
+  # The tunnel: a studio-reachable public URL with zero account/config by default.
+  #  - DEFAULT (no TUNNEL_TOKEN): a TryCloudflare QUICK tunnel -> prints a https://<random>.trycloudflare.com
+  #    URL in its logs. No CF account, no domain. That random URL is your LOCAL_BACKEND_URL.
+  #  - NAMED (set TUNNEL_TOKEN in .env): a stable, named Cloudflare tunnel (the production homelabber
+  #    setup) with your own hostname. Default stays the quick tunnel; named is the documented upgrade.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: vivijure-cloudflared
+    restart: unless-stopped
+    depends_on:
+      - vivijure-local-backend
+    env_file:
+      - .env
+    command:
+      - sh
+      - -c
+      - >
+        if [ -n "$$TUNNEL_TOKEN" ]; then
+          exec cloudflared tunnel --no-autoupdate run --token "$$TUNNEL_TOKEN";
+        else
+          echo "No TUNNEL_TOKEN set -> TryCloudflare quick tunnel; grab the printed URL below.";
+          exec cloudflared tunnel --no-autoupdate --url http://vivijure-local-backend:8000;
+        fi
 
 volumes:
   vivijure_models:

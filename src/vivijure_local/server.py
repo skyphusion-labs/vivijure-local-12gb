@@ -29,13 +29,19 @@ _STATUS_RE = re.compile(r"^/status/([A-Za-z0-9]+)$")
 _CANCEL_RE = re.compile(r"^/cancel/([A-Za-z0-9]+)$")
 
 
-def authorized(headers_token: str | None, expected: str) -> bool:
-    """True if the request is allowed. When no token is configured (expected == ""), the server runs
-    open (a trusted LAN tunnel); when one is set, the Bearer token must match exactly. Defense in depth
-    behind the module trust boundary, not the primary auth."""
+def token_error(headers_token: str | None, expected: str) -> tuple[int, dict] | None:
+    """Guard for the protected i2v routes. Returns an (status, body) error, or None when allowed.
+
+    HARD RULE: the backend is exposed to the public internet through the tunnel, so an i2v endpoint MUST
+    NEVER serve without a valid token -- an open endpoint is an unauthenticated GPU-spend / abuse vector
+    (the module-trust-boundary lesson). A request is rejected when no token is configured at all (503:
+    refuse to run open) or the Bearer token is missing / wrong (401). /health and the no-GPU selftest
+    stay open for liveness; everything that can touch the GPU is gated."""
     if not expected:
-        return True
-    return bool(headers_token) and headers_token == expected
+        return 503, {"ok": False, "error": "LOCAL_BACKEND_TOKEN not configured: refusing to serve an open i2v endpoint (the tunnel is public)"}
+    if not headers_token or headers_token != expected:
+        return 401, {"ok": False, "error": "unauthorized"}
+    return None
 
 
 def route(
@@ -54,13 +60,13 @@ def route(
     if method == "GET" and path == "/health":
         return 200, {"ok": True, "service": "vivijure-local-backend", "version": version, "engine": "ltx-video"}
 
-    if not authorized(token, expected_token):
-        return 401, {"ok": False, "error": "unauthorized"}
-
     if method == "POST" and path == "/run":
         payload = (body or {}).get("input", body or {})
         if (body or {}).get("selftest") or payload.get("selftest"):
-            return 200, {"ok": True, "selftest": True, "engine": "ltx-video"}
+            return 200, {"ok": True, "selftest": True, "engine": "ltx-video"}  # no-GPU probe stays open
+        err = token_error(token, expected_token)  # i2v touches the GPU -> token required
+        if err:
+            return err
         action = str(payload.get("action") or "i2v_clip")
         if action != "i2v_clip":
             # This backend serves the motion.backend door only; other actions are an honest 400, not a
@@ -75,6 +81,9 @@ def route(
 
     m = _STATUS_RE.match(path)
     if method == "GET" and m:
+        err = token_error(token, expected_token)
+        if err:
+            return err
         job = registry.get(m.group(1))
         if job is None:
             # Unknown / evicted id: a real RunPod 404 envelope, so the module's jobGone + grace logic
@@ -84,6 +93,9 @@ def route(
 
     m = _CANCEL_RE.match(path)
     if method == "POST" and m:
+        err = token_error(token, expected_token)
+        if err:
+            return err
         registry.cancel(m.group(1))  # idempotent; always ok (the contract reads ok as "not running")
         return 200, {"ok": True}
 

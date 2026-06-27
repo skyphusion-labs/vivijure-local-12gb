@@ -23,30 +23,32 @@ pipeline end to end and render for the cost of electricity, this is for you.
   headroom). 8GB is not enough for a quality render.
 - **Docker** + the **NVIDIA Container Toolkit** (lets the container see your GPU):
   https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html
-- A **Cloudflare tunnel** (free) to expose the backend to your studio without opening a port.
 - Your Vivijure studio's **R2 bucket** credentials (a per-function key scoped to that bucket).
+- That's it for the quick start: the tunnel is BUNDLED (TryCloudflare quick tunnel -- no Cloudflare
+  account, no domain). For a stable hostname later, a free Cloudflare account + a named-tunnel token.
 
 ## Stand it up (one command after config)
 
 ```sh
 git clone https://github.com/skyphusion-labs/vivijure-local-backend
 cd vivijure-local-backend
-cp .env.example .env          # fill in your R2 creds + (optional) a LOCAL_BACKEND_TOKEN
-docker compose up -d          # first start pulls the LTX weights into a cache volume, then serves :8000
-curl localhost:8000/health    # {"ok":true,"engine":"ltx-video",...}
+cp .env.example .env          # fill in your R2 creds (LOCAL_BACKEND_TOKEN auto-generates if blank)
+docker compose up -d          # starts the backend + a Cloudflare tunnel; first boot caches LTX weights
+docker compose logs cloudflared             # -> https://<random>.trycloudflare.com   (your LOCAL_BACKEND_URL)
+docker compose logs vivijure-local-backend  # -> the auto-generated LOCAL_BACKEND_TOKEN (if you left it blank)
 ```
 
 The first boot downloads the LTX-Video weights once into a named volume (`vivijure_models`), so
-restarts and upgrades are instant. The server binds to `127.0.0.1:8000` by default -- reachable only
-through your tunnel, never the open LAN.
+restarts and upgrades are instant. The backend is NOT published on the LAN -- the bundled tunnel is
+the only way in, and it hard-rejects any i2v request without your `LOCAL_BACKEND_TOKEN`.
 
 ## Point your studio at it
 
-1. Run a Cloudflare tunnel to `http://localhost:8000` and note the hostname
-   (e.g. `https://render.yourdomain.example`).
+1. Take the `https://<random>.trycloudflare.com` URL from `docker compose logs cloudflared` -- that is
+   your `LOCAL_BACKEND_URL`. (For a stable hostname, set `TUNNEL_TOKEN` in `.env` for a named tunnel.)
 2. In your studio, seed the `local-gpu` module secrets and bind it (full steps in
-   [INTEGRATION.md](./INTEGRATION.md)): `LOCAL_BACKEND_URL` = your tunnel hostname,
-   `LOCAL_BACKEND_TOKEN` = the value from your `.env` (if you set one).
+   [INTEGRATION.md](./INTEGRATION.md)): `LOCAL_BACKEND_URL` = the tunnel URL,
+   `LOCAL_BACKEND_TOKEN` = the value you set (or the one the backend logged).
 3. The "Local (your GPU)" door now appears in the planner's backend picker. Pick it and render.
 
 ## Quality tiers (what your card honestly delivers)
