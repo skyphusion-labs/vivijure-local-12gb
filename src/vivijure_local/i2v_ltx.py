@@ -141,7 +141,7 @@ def animate(shot_id: str, keyframe: Path, prompt: str, cfg: I2VConfig, out_path:
     export_to_video(result_frames, str(out_path), fps=cfg.fps)
     return I2VResult(
         shot_id=shot_id or "shot", path=out_path, num_frames=num_frames, fps=cfg.fps,
-        seconds=clip_seconds(num_frames, cfg.fps), distilled=True,
+        seconds=clip_seconds(num_frames, cfg.fps), distilled=False,
     )
 
 

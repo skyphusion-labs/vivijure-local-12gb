@@ -56,12 +56,12 @@ card's honest ceiling, not datacenter parity:
 
 | Tier | Model | Resolution | Length | Speed feel |
 |---|---|---|---|---|
-| draft | LTX 2B distilled | 512x320 | ~4s | fastest preview |
-| standard | LTX 2B distilled | 704x480 | ~5s | the everyday tier |
-| final | LTX 13B fp8 distilled | 768x512 | ~5s | best your card gives (slower) |
+| draft | LTX-Video (base) | 512x320 | ~4s | fastest preview (~39s/clip) |
+| standard | LTX-Video (base) | 704x512 | ~5s | the everyday tier (~2min/clip) |
+| final | LTX-Video (base) | 768x512 | ~5s | best base quality (slower) |
 
-(Exact resolution/frame ceilings + real per-clip times are confirmed by the benchmark on the card;
-see `docs/live-benchmark-plan.md`. These are conservative defaults until then.)
+(VALIDATED on a 16GB Ada card -- see `docs/proof/RESULTS.md`: peak ~10.4GB, no OOM, ~6GB headroom;
+draft ~39s/clip, standard ~2min/clip. Real sample clips are in `docs/proof/`.)
 
 ## Troubleshooting
 

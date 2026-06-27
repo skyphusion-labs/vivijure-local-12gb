@@ -39,13 +39,13 @@ the card's honest ceiling, not datacenter parity.
 
 | Tier | Model | Resolution | Frames | Offload |
 |---|---|---|---|---|
-| `draft` | LTX 2B distilled | 512x320 | 97 | model CPU offload + VAE tiling |
-| `standard` | LTX 2B distilled | 704x480 | 121 (~5s) | model CPU offload + VAE tiling |
-| `final` | LTX 13B fp8 distilled | 768x512 | 121 | sequential CPU offload + VAE tiling |
+| `draft` | LTX-Video (base) | 512x320 | 97 | model CPU offload + VAE tiling |
+| `standard` | LTX-Video (base) | 704x512 | 121 (~5s) | model CPU offload + VAE tiling |
+| `final` | LTX-Video (base) | 768x512 | 121 | model CPU offload + VAE tiling |
 
-> These are conservative SCAFFOLD defaults. The exact 16GB ceilings + real wall-clock are finalized by
-> the live benchmark ([docs/live-benchmark-plan.md](docs/live-benchmark-plan.md)) -- the proof gate,
-> scripted in [`scripts/benchmark.py`](scripts/benchmark.py), ready to fire on the card.
+> VALIDATED on a 16GB Ada card ([docs/proof/RESULTS.md](docs/proof/RESULTS.md)): peak ~10.4GB (no OOM,
+> ~6GB headroom), draft 38.6s/clip, standard 125.6s/clip. The few-step distilled + 13B "final" path
+> (better quality/faster, via LTXConditionPipeline) is a follow-up; the base i2v above is proven.
 
 ## The job API (RunPod-compatible)
 

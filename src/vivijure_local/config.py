@@ -52,8 +52,11 @@ class Offload(str, Enum):
 # LTX model variants we target on a 16GB card. The 2B-distilled is the lightest real i2v and the
 # default; the 13B-fp8-distilled is the quality ceiling that still fits Ada 16GB (fp8 is an Ada
 # feature -- the 4060 Ti is Ada). See docs/i2v-model-selection.md for the comparison that chose LTX.
-LTX_2B_DISTILLED = "Lightricks/LTX-Video-2B-distilled"      # exact repo id pinned at deploy
-LTX_13B_FP8_DISTILLED = "Lightricks/LTX-Video-0.9.8-13B-distilled-fp8"
+# Benchmark-VALIDATED on a 16GB card (docs/proof/RESULTS.md): the base LTX i2v via
+# LTXImageToVideoPipeline runs at ~10.4GB peak with model-cpu-offload + VAE tiling -- ~6GB headroom.
+# This is the proven path. The few-step distilled + 13B variants load via a DIFFERENT pipeline class
+# (LTXConditionPipeline + the spatial upscaler) and are a quality FOLLOW-UP, not wired yet.
+LTX_BASE = "Lightricks/LTX-Video"
 
 
 @dataclass(frozen=True)
@@ -62,8 +65,8 @@ class TierConfig:
     frame-count is derived per shot (config.py never fixes a film's length)."""
 
     model: str
-    steps: int             # LTX distilled runs few-step (4-10); the dev/full path would be higher
-    guidance_scale: float  # distilled sampling is near guidance-free (~1.0)
+    steps: int             # base LTX i2v: ~25-50 denoise steps (validated on the card)
+    guidance_scale: float  # base LTX i2v sampling ~3.0 (the model card default)
     width: int             # must be divisible by 32 (LTX constraint), enforced in i2v_ltx.snap_dim
     height: int
     max_frames: int        # ceiling for this tier (snapped to 8k+1 by i2v_ltx.snap_frames)
@@ -71,24 +74,25 @@ class TierConfig:
     vae_tiling: bool       # decode the VAE in tiles to bound peak decode VRAM (the big 16GB saver)
 
 
-# The honest 16GB ladder. Conservative scaffold defaults; see docs/live-benchmark-plan.md before
-# raising any ceiling. Rationale per tier is in docs/i2v-model-selection.md.
+# The honest 16GB ladder, VALIDATED on an RTX 2000 Ada 16GB (docs/proof/RESULTS.md): peak ~10.4GB
+# at draft + standard with model-cpu-offload + VAE tiling. Same base model per tier; the tiers differ
+# by resolution + steps (speed vs fidelity). The heavier 13B path is a documented follow-up.
 _TIERS: dict[QualityTier, TierConfig] = {
-    # Fast preview: lightest model, lowest res, short. Sub-minute-class on the card (community LTX 2B).
+    # Fast preview: measured 38.6s/clip, peak 10.44GB on a 16GB Ada (docs/proof).
     QualityTier.DRAFT: TierConfig(
-        model=LTX_2B_DISTILLED, steps=6, guidance_scale=1.0,
+        model=LTX_BASE, steps=25, guidance_scale=3.0,
         width=512, height=320, max_frames=97, offload=Offload.MODEL_CPU_OFFLOAD, vae_tiling=True,
     ),
-    # The comfortable middle: 2B distilled at a usable resolution and ~5s clip length.
+    # The comfortable middle: measured 125.6s/clip, peak 10.46GB on a 16GB Ada (docs/proof).
     QualityTier.STANDARD: TierConfig(
-        model=LTX_2B_DISTILLED, steps=8, guidance_scale=1.0,
-        width=704, height=480, max_frames=121, offload=Offload.MODEL_CPU_OFFLOAD, vae_tiling=True,
+        model=LTX_BASE, steps=40, guidance_scale=3.0,
+        width=704, height=512, max_frames=121, offload=Offload.MODEL_CPU_OFFLOAD, vae_tiling=True,
     ),
-    # The card's HONEST ceiling (NOT datacenter parity): the 13B-fp8-distilled at a higher resolution,
-    # leaning on sequential offload + VAE tiling to fit 16GB. Slower, best fidelity this card can give.
+    # The card's HONEST ceiling: the base model at a higher resolution + more steps (still ~10.5GB,
+    # fits 16GB with headroom). NOT datacenter parity; the 13B path is the future quality tier.
     QualityTier.FINAL: TierConfig(
-        model=LTX_13B_FP8_DISTILLED, steps=10, guidance_scale=1.0,
-        width=768, height=512, max_frames=121, offload=Offload.SEQUENTIAL_CPU_OFFLOAD, vae_tiling=True,
+        model=LTX_BASE, steps=50, guidance_scale=3.0,
+        width=768, height=512, max_frames=121, offload=Offload.MODEL_CPU_OFFLOAD, vae_tiling=True,
     ),
 }
 

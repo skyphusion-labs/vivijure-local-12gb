@@ -66,14 +66,14 @@ The control plane owns the tier vocabulary (`draft` / `standard` / `final`) and 
 tier into every motion.backend module; an enum value not in the module's schema is silently dropped
 (vivijure #124). So the `local-gpu` module keeps the same three names, and THIS backend maps each to an
 LTX config a 16GB card can actually deliver. `final` here is the card's honest ceiling, NOT Wan-on-B200
-parity. (Mapping lives in `src/vivijure_local/config.py`; these are conservative SCAFFOLD defaults to be
-finalized by the live benchmark.)
+parity. (Mapping lives in `src/vivijure_local/config.py`; VALIDATED on a 16GB Ada -- peak ~10.4GB, no
+OOM -- see `docs/proof/RESULTS.md`.)
 
 | Tier | Model | Steps | Resolution | Max frames | Offload | Intent |
 |---|---|---|---|---|---|---|
-| `draft` | LTX 2B distilled | 6 | 512x320 | 97 | model CPU offload + VAE tiling | fast preview |
-| `standard` | LTX 2B distilled | 8 | 704x480 | 121 (~5s @ 24fps) | model CPU offload + VAE tiling | the comfortable middle |
-| `final` | LTX 13B fp8 distilled | 10 | 768x512 | 121 | **sequential** CPU offload + VAE tiling | the card's honest fidelity ceiling |
+| `draft` | LTX-Video (base) | 25 | 512x320 | 97 | model CPU offload + VAE tiling | fast preview (38.6s) |
+| `standard` | LTX-Video (base) | 40 | 704x512 | 121 (~5s @ 24fps) | model CPU offload + VAE tiling | the comfortable middle (125.6s) |
+| `final` | LTX-Video (base) | 50 | 768x512 | 121 | model CPU offload + VAE tiling | the card's honest ceiling |
 
 The pure VRAM budgeter (`src/vivijure_local/vram.py`) estimates each tier's peak against the 16GB floor
 and picks the weakest offload that fits, conservatively (it would rather page more than OOM the user's

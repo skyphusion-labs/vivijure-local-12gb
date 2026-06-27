@@ -34,13 +34,10 @@ def test_vae_tiling_discounts_the_activation_peak():
 
 
 def test_strongest_offload_picks_the_weakest_that_fits():
-    # The 13B-fp8 final config is too heavy resident; the budgeter should not pick NONE for it.
-    final = _cfg(QualityTier.FINAL)
-    chosen = vram.strongest_offload(final)
-    assert chosen in (Offload.MODEL_CPU_OFFLOAD, Offload.SEQUENTIAL_CPU_OFFLOAD)
-    # The light 2B draft config fits resident (NONE), so the budgeter need not page it at all.
-    draft = _cfg(QualityTier.DRAFT)
-    assert vram.strongest_offload(draft) is Offload.NONE
+    # The base LTX i2v (~14GB fully resident) is too tight for 16GB without offload, so the budgeter
+    # recommends model-cpu-offload at every tier -- exactly what we validated (-> ~10.4GB peak).
+    for tier in (QualityTier.DRAFT, QualityTier.STANDARD, QualityTier.FINAL):
+        assert vram.strongest_offload(_cfg(tier)) is Offload.MODEL_CPU_OFFLOAD
 
 
 def test_a_24gb_card_has_more_headroom_than_the_16gb_floor():

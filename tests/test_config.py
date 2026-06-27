@@ -11,10 +11,10 @@ def test_tier_parse_is_lenient_and_defaults_to_standard():
 
 def test_the_three_tiers_map_to_distinct_honest_configs():
     draft, std, final = (tier_config(t) for t in (QualityTier.DRAFT, QualityTier.STANDARD, QualityTier.FINAL))
-    # draft is the lightest/fastest; final is the card's honest ceiling (heaviest offload + biggest model).
+    # draft is the lightest/fastest; final is the card's honest ceiling (higher res + more steps).
     assert draft.width <= std.width <= final.width
-    assert draft.offload is Offload.MODEL_CPU_OFFLOAD
-    assert final.offload is Offload.SEQUENTIAL_CPU_OFFLOAD  # leans hardest on offload to fit 16GB
+    assert final.steps > std.steps > draft.steps           # tiers differ by steps (fidelity), validated
+    assert all(t.offload is Offload.MODEL_CPU_OFFLOAD for t in (draft, std, final))  # base i2v fits 16GB at model-offload (~10.4GB measured)
     assert all(t.vae_tiling for t in (draft, std, final))   # tiling everywhere (the big 16GB saver)
 
 

@@ -28,8 +28,9 @@ RESERVED_GB = 2.0
 # headroom for activation spikes, so the budgeter treats it as heavier so it never picks NONE-offload at
 # the edge). The live benchmark replaces these with measured peaks.
 _WEIGHTS_GB = {
-    "Lightricks/LTX-Video-2B-distilled": 5.0,            # 2B at fp16/bf16
-    "Lightricks/LTX-Video-0.9.8-13B-distilled-fp8": 14.0,  # 13B at fp8 (Ada-only): ~13GB + spike margin
+    # MEASURED: base LTX i2v peaks ~10.4GB at MODEL_CPU_OFFLOAD on a 16GB Ada (docs/proof/RESULTS.md).
+    # The resident figure here is a conservative guardrail; the proof is the authoritative number.
+    "Lightricks/LTX-Video": 14.0,  # fully-resident is too tight for 16GB -> recommend model-offload
 }
 _DEFAULT_WEIGHTS_GB = 6.0  # an unknown variant: assume mid-size so we err toward more offload
 
