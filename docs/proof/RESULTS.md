@@ -6,7 +6,7 @@ render end to end with no OOM and ~1.2GB of allocator headroom, verified two ind
 supersedes the earlier uncapped 16GB draft/standard proof (in git history): the same engine, now proven
 at a tighter budget AND across all three tiers.
 
-**Conditions.** Container `ghcr.io/skyphusion-labs/vivijure-local-backend:proof-12gb-ssh`, built from
+**Conditions.** Container `ghcr.io/skyphusion-labs/vivijure-local-12gb:proof-12gb-ssh`, built from
 the pinned recipe (torch 2.4.1+cu124, torchvision 0.19.1, diffusers 0.32.2, transformers 4.46.3). GPU:
 NVIDIA RTX 2000 Ada Generation, 15.7 GB total (the closest Ada/16GB proxy for the RTX 4060 Ti target),
 capped to `VIVIJURE_MAX_VRAM_GB=11`, so the server pins
