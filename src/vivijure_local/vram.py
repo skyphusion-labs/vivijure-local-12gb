@@ -1,4 +1,4 @@
-"""Pure VRAM budgeting for the 16GB door.
+"""Pure VRAM budgeting for the 12GB door.
 
 A coarse, HONEST first-order estimator of whether an i2v config fits a card, and which offload mode it
 needs. It is deliberately conservative (it would rather recommend more offload than OOM a user's only
@@ -15,8 +15,8 @@ from dataclasses import dataclass
 
 from .config import I2VConfig, Offload
 
-# The design floor. Conrad DECIDED: RTX 4060 Ti 16GB is the minimum; bigger cards just get headroom.
-FLOOR_VRAM_GB = 16.0
+# The design floor. PROVEN at a 12GB consumer GPU (docs/proof/RESULTS.md); bigger cards just get headroom.
+FLOOR_VRAM_GB = 12.0
 
 # A slice of VRAM the driver / CUDA context / cuDNN workspaces / allocator fragmentation always hold.
 # Never available to the model. Set conservatively (PyTorch fragmentation alone routinely strands 1-2GB
@@ -30,7 +30,7 @@ RESERVED_GB = 2.0
 _WEIGHTS_GB = {
     # MEASURED: base LTX i2v peaks ~10.4GB at MODEL_CPU_OFFLOAD on a 16GB Ada (docs/proof/RESULTS.md).
     # The resident figure here is a conservative guardrail; the proof is the authoritative number.
-    "Lightricks/LTX-Video": 14.0,  # fully-resident is too tight for 16GB -> recommend model-offload
+    "Lightricks/LTX-Video": 14.0,  # fully-resident is too tight for 12GB -> recommend model-offload
 }
 _DEFAULT_WEIGHTS_GB = 6.0  # an unknown variant: assume mid-size so we err toward more offload
 

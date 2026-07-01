@@ -1,8 +1,8 @@
-"""Image-to-video on a 16GB consumer card: LTX-Video.
+"""Image-to-video on a 12GB consumer card: LTX-Video.
 
 The local door's engine. The keyframe is the still; this turns it into motion. LTX-Video takes the
 keyframe as the first (conditioning) frame and the scene prompt as the motion description and produces
-N frames. LTX was chosen over CogVideoX / SVD / AnimateDiff for the 16GB floor on fit + speed +
+N frames. LTX was chosen over CogVideoX / SVD / AnimateDiff for the 12GB floor on fit + speed +
 license (the full comparison is docs/i2v-model-selection.md): it is the lightest real i2v model, runs
 few-step (distilled), and its Open Weights License is the cleanest match for a freely-given AGPL
 project.
@@ -95,9 +95,9 @@ def animate(shot_id: str, keyframe: Path, prompt: str, cfg: I2VConfig, out_path:
     Heavy imports (torch / diffusers) are DEFERRED so this module stays CPU-importable and the pure
     helpers above test without a GPU; this body is validated on the card (the spend gate -- see
     docs/live-benchmark-plan.md). The offload mode from `cfg` is applied to the pipeline so the run
-    fits 16GB; `progress_cb(step, total)` is wired best-effort through diffusers' callback hook.
+    fits the 12GB budget; `progress_cb(step, total)` is wired best-effort through diffusers' callback hook.
 
-    NOTE: this is the SCAFFOLD body. It encodes the intended call shape and the 16GB offload wiring;
+    NOTE: this is the SCAFFOLD body. It encodes the intended call shape and the 12GB offload wiring;
     the exact pipeline kwargs (LTX revision, conditioning argument name) are pinned against the deployed
     diffusers version during the card benchmark. It raises if torch/diffusers is absent rather than
     pretending to render (a producer stage never fakes output)."""
@@ -146,7 +146,7 @@ def animate(shot_id: str, keyframe: Path, prompt: str, cfg: I2VConfig, out_path:
 
 
 def _apply_offload(pipe, cfg: I2VConfig) -> None:
-    """Apply the config's VRAM strategy to the pipeline so the run fits 16GB. Best-effort per step: a
+    """Apply the config's VRAM strategy to the pipeline so the run fits the 12GB budget. Best-effort per step: a
     diffusers build that lacks a hook runs without it rather than failing the render."""
     if cfg.vae_tiling:
         for fn in ("enable_vae_tiling", "enable_tiling"):

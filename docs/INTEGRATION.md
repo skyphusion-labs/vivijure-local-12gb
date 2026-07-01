@@ -1,6 +1,6 @@
 # Wiring the local door into the studio
 
-How the `vivijure-local-backend` (this repo) plugs into the Vivijure studio through the `local-gpu`
+How the `vivijure-local-12gb` (this repo) plugs into the Vivijure studio through the `local-gpu`
 motion.backend module. The control plane is UNCHANGED in code; wiring is binding + secrets + the
 homelabber's running backend. Stage all of this now; flip it on the instant the benchmark proves out.
 
@@ -8,7 +8,7 @@ homelabber's running backend. Stage all of this now; flip it on the instant the 
 
 ```
 studio control plane --(service binding MODULE_LOCAL_GPU)--> local-gpu module worker
-   local-gpu --(POST /run i2v_clip, GET /status, POST /cancel)--> Cloudflare tunnel --> THIS backend (your 16GB GPU)
+   local-gpu --(POST /run i2v_clip, GET /status, POST /cancel)--> Cloudflare tunnel --> THIS backend (your 12GB+ GPU)
 ```
 
 The `local-gpu` module (in the `vivijure` repo, `modules/local-gpu/`) is the bridge. It holds the
@@ -58,7 +58,7 @@ the live studio CI workflow before you run it, and only flip once the backend en
    binding must point at a DEPLOYED module (else the core deploy dangles), so do this AFTER step 2:
 
    ```toml
-   # Local consumer GPU (LTX-Video on the homelabber's own 16GB card). The local door.
+   # Local consumer GPU (LTX-Video on the homelabber's own 12GB card). The local door.
    [[services]]
    binding = "MODULE_LOCAL_GPU"
    service = "vivijure-module-local-gpu"

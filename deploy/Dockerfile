@@ -1,4 +1,4 @@
-# vivijure-local-backend runtime image (the 16GB consumer door).
+# vivijure-local-12gb runtime image (the 12GB consumer door).
 #
 # torch/torchvision install from the CUDA index matched to the card's driver line, PINNED to the set
 # validated in the 12GB/16GB container proof (torch 2.4.1 + torchvision 0.19.1 from cu124, paired with

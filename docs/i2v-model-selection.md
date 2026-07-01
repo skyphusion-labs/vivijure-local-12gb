@@ -1,40 +1,42 @@
-# Image-to-video model selection for the 16GB door
+# Image-to-video model selection for the 12GB door
 
 > Deliverable: the DRY fit analysis. Which i2v model the local-consumer backend runs on a single
-> RTX 4060 Ti 16GB, and why. Desk research from model cards / official repos / diffusers docs /
+> 12GB consumer GPU, and why. Desk research from model cards / official repos / diffusers docs /
 > reputable community reports -- NO rented hardware. Numbers marked **[community]** are community
 > reports, not vendor-official. Sources at the bottom.
 
 ## The constraint
 
-Conrad DECIDED the floor: **RTX 4060 Ti 16GB**. Verbatim: *"4060Ti, that's the lowest we can really
-go if you expect a quality render."* So 16GB is the design target AND the minimum -- model choice,
-offload, and the resolution/frame ceilings are all scoped to fit AND produce acceptable quality on a
-16GB card. Bigger cards (24GB+) just get headroom.
+Conrad set the original design target at the **RTX 4060 Ti 16GB**. Verbatim: *"4060Ti, that's the
+lowest we can really go if you expect a quality render."* The engine was scoped to fit that comfortably;
+the later 12GB VRAM-budget proof (`docs/proof/RESULTS.md`) then showed all three tiers hold under an
+11GB cap, so the PROVEN floor is a **12GB consumer GPU** (e.g. RTX 3060 12GB, RTX 4070, RTX 4070 Ti).
+Model choice, offload, and the resolution/frame ceilings are scoped to fit AND produce acceptable
+quality there; 16GB+ cards just get comfortable headroom.
 
 The datacenter backend's i2v is **Wan 2.2 A14B**, a two-expert (14B + 14B) MoE that runs on H200 /
-B200. It does NOT fit 16GB. So the local door needs a different engine. This is a model-SELECTION
+B200. It does NOT fit a consumer card. So the local door needs a different engine. This is a model-SELECTION
 decision, evaluated on three axes against the floor: **fit** (runs without OOM), **speed**, **quality**
 -- plus **license** (the project is AGPL-3.0, given freely, so a clean self-host/commercial license
 matters).
 
-## The comparison (single 16GB consumer card)
+## The comparison (single consumer card)
 
 | Axis | **LTX-Video** (2B / 13B distilled) | CogVideoX-5B-I2V | SVD / SVD-XT | AnimateDiff (+SparseCtrl / Lightning) |
 |---|---|---|---|---|
-| **16GB fit** | **Excellent** -- lightest real i2v; 2B distilled runs even on 8GB [community] | Tight but works (fp8 + **sequential** CPU offload + VAE tiling; ~16GB [community]) | Good (model offload + `decode_chunk_size` + VAE tiling; <10GB [community]) | Excellent -- most headroom (SD1.5 16f ~8GB [community]) |
+| **Consumer-card fit** | **Excellent** -- lightest real i2v; 2B distilled runs even on 8GB [community] | Tight but works (fp8 + **sequential** CPU offload + VAE tiling; ~16GB [community]) | Good (model offload + `decode_chunk_size` + VAE tiling; <10GB [community]) | Excellent -- most headroom (SD1.5 16f ~8GB [community]) |
 | **Speed** | **Fastest** -- few-step distilled (4-10 steps), sub-minute class [community] | **Slowest** -- ~14-15 min/clip on a 12-16GB card [community] (sequential offload paging) | Moderate -- a few min/clip with offload [community] | Very fast (Lightning 1-8 step) |
 | **True i2v quality** | Good, fast-improving; 2B < 13B fidelity | **Best** -- strong first-frame identity + coherent motion + text prompt | Good motion, **no text control**, weak faces/large-motion drift | Weakest *true* i2v (SparseCtrl is approximate); best for *stylized* motion |
 | **License (free self-host)** | **Cleanest** -- LTX Open Weights License, free commercial **< $10M revenue**, no gating/metering | Friction: 5B is custom (register + **1M visits/mo cap**); **2B is Apache-2.0** | OK -- Stability Community License, free **< $1M**, custom | Code Apache-2.0 (clean), but output bound by the base SD/SDXL checkpoint's license |
 | **diffusers maturity** | First-class `LTXImageToVideoPipeline` (+ native fp8) | First-class `CogVideoXImageToVideoPipeline` | First-class `StableVideoDiffusionPipeline` | Mature, but i2v only via SparseCtrl/IPAdapter (no single-image i2v pipeline) |
-| **Res / length ceiling (16GB)** | ~512-768p, up to 257 frames (8k+1), 24-30 fps | Fixed 720x480, 49 frames, 8 fps (~6s) | 576x1024, 14 or 25 frames (~4s) | SD1.5 512x512 16f (~2s, extendable); SDXL 1024 beta |
+| **Res / length ceiling** | ~512-768p, up to 257 frames (8k+1), 24-30 fps | Fixed 720x480, 49 frames, 8 fps (~6s) | 576x1024, 14 or 25 frames (~4s) | SD1.5 512x512 16f (~2s, extendable); SDXL 1024 beta |
 
 ## Recommendation: LTX-Video
 
 **LTX-Video (2B-distilled as the default; 13B-fp8-distilled as the honest ceiling).** It is the only
-candidate that wins **fit + speed + license simultaneously** on a 16GB card:
+candidate that wins **fit + speed + license simultaneously** on a 12GB card:
 
-- **Fit.** The lightest real i2v model here. The 2B-distilled runs comfortably in 16GB (community
+- **Fit.** The lightest real i2v model here. The 2B-distilled runs comfortably on a 12GB card (community
   reports it even on 8GB), leaving headroom for keyframe/finish to share the card. The 13B-fp8-distilled
   still fits Ada 16GB (fp8 is an Ada feature, and the 4060 Ti is Ada) with sequential offload + VAE
   tiling -- our `final` tier.
@@ -50,7 +52,7 @@ candidate that wins **fit + speed + license simultaneously** on a 16GB card:
 **The honest trade-off:** LTX 2B is visibly lower fidelity than 13B-class models, and at the fastest
 distilled settings it can trade some prompt adherence for speed. The `final` tier (13B-fp8-distilled)
 buys back fidelity at the cost of runtime. This is exactly why the tiers are mapped per-backend and
-labeled honestly (below) -- a 16GB card's `final` is its honest ceiling, not datacenter parity.
+labeled honestly (below) -- a 12GB card's `final` is its honest ceiling, not datacenter parity.
 
 **The runner-up, explicitly:** if a user prioritizes i2v fidelity over speed and can tolerate ~15
 min/clip, **CogVideoX-5B-I2V** is the quality leader (best first-frame identity + motion + text
@@ -60,12 +62,12 @@ CogVideoX without the 5B registration friction, at lower quality. SVD-XT is a fi
 workhorse (no text control). AnimateDiff is the pick only for stylized/animated motion, not photoreal
 "animate this exact photo."
 
-## The honest tier mapping (16GB)
+## The honest tier mapping (12GB)
 
 The control plane owns the tier vocabulary (`draft` / `standard` / `final`) and injects the chosen
 tier into every motion.backend module; an enum value not in the module's schema is silently dropped
 (vivijure #124). So the `local-gpu` module keeps the same three names, and THIS backend maps each to an
-LTX config a 16GB card can actually deliver. `final` here is the card's honest ceiling, NOT Wan-on-B200
+LTX config a 12GB card can actually deliver. `final` here is the card's honest ceiling, NOT Wan-on-B200
 parity. (Mapping lives in `src/vivijure_local/config.py`; VALIDATED on a 16GB Ada -- peak ~10.4GB, no
 OOM -- see `docs/proof/RESULTS.md`.)
 
@@ -75,14 +77,14 @@ OOM -- see `docs/proof/RESULTS.md`.)
 | `standard` | LTX-Video (base) | 40 | 704x512 | 121 (~5s @ 24fps) | model CPU offload + VAE tiling | the comfortable middle (125.6s) |
 | `final` | LTX-Video (base) | 50 | 768x512 | 121 | model CPU offload + VAE tiling | the card's honest ceiling |
 
-The pure VRAM budgeter (`src/vivijure_local/vram.py`) estimates each tier's peak against the 16GB floor
+The pure VRAM budgeter (`src/vivijure_local/vram.py`) estimates each tier's peak against the 12GB floor
 and picks the weakest offload that fits, conservatively (it would rather page more than OOM the user's
 only GPU). All three tiers are estimated to fit the floor; the live benchmark replaces the coarse
 coefficients with measured peaks.
 
 ## What still needs real silicon
 
-The exact resolution / frame / step ceilings that fit 16GB -- and the real per-clip wall-clock -- can
+The exact resolution / frame / step ceilings that fit a 12GB card -- and the real per-clip wall-clock -- can
 only be confirmed on the card. That is the one step behind the spend gate; it is NOT executed here.
 The costed plan is in [`live-benchmark-plan.md`](./live-benchmark-plan.md).
 

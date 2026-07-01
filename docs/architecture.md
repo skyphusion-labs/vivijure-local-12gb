@@ -1,6 +1,6 @@
 # Architecture: the local-consumer render backend
 
-> The 16GB door. How this backend fits the Vivijure studio without changing the control plane, and how
+> The 12GB door. How this backend fits the Vivijure studio without changing the control plane, and how
 > it is the deliberate opposite of the RunPod datacenter backend.
 
 ## One studio, two honest doors
@@ -22,8 +22,8 @@ hook, and the USER picks the door:
             v                                                   v
    RunPod serverless                                   Cloudflare tunnel -> homelab box
             |                                                   |
-   vivijure-backend                                    vivijure-local-backend (this repo)
-   Wan 2.2 A14B MoE (H200 / B200)                      LTX-Video (RTX 4060 Ti 16GB)
+   vivijure-backend                                    vivijure-local-12gb (this repo)
+   Wan 2.2 A14B MoE (H200 / B200)                      LTX-Video (12GB consumer GPU)
 ```
 
 The two backends speak the IDENTICAL `i2v_clip` job contract (`{ action, project, shot_id, prompt,
@@ -36,14 +36,14 @@ drive either door. The only difference is the box behind the endpoint and the en
 The existing `own-gpu` module is "bring your own keys" -- but it still runs on a **RunPod endpoint the
 user provisions**. It is own-keys, not own-silicon. This backend is the real homelab door: the work
 happens on a consumer card the user already owns, reached over a Cloudflare tunnel. No rent, no cloud
-GPU at all. That is the point of the 16GB floor: the deliberate opposite of the datacenter backend.
+GPU at all. That is the point of the 12GB floor: the deliberate opposite of the datacenter backend.
 
 ## The two halves
 
 | Half | Where | What |
 |---|---|---|
 | `local-gpu` module worker | `vivijure/modules/local-gpu/` (a CF Worker) | the contract bridge: serves `/module.json` `/invoke` `/poll` `/cancel`; submits `i2v_clip` to the box, polls `/status`, surfaces the clip_key. A near-clone of `own-gpu` + `/cancel`. |
-| `vivijure-local-backend` | this repo (runs on the box) | the engine: a long-running server exposing a RunPod-compatible job API, an in-process async job registry, and the LTX-Video i2v engine scoped to 16GB. |
+| `vivijure-local-12gb` | this repo (runs on the box) | the engine: a long-running server exposing a RunPod-compatible job API, an in-process async job registry, and the LTX-Video i2v engine scoped to a 12GB card. |
 
 ## Why a RunPod-compatible job API on the local box
 
@@ -53,7 +53,7 @@ and the queue. The local box has no such platform, so this backend provides that
 IN_PROGRESS / COMPLETED / FAILED) means the `local-gpu` module's poll loop is a near-clone of
 `own-gpu`'s -- minimum new surface, maximum reuse of the proven #141 grace-window discipline.
 
-A consumer card runs ONE i2v job at a time (16GB cannot fit two pipelines), so the registry is a
+A consumer card runs ONE i2v job at a time (a 12GB card cannot fit two pipelines), so the registry is a
 single-worker serial queue: extra submits wait IN_QUEUE. Cancel is best-effort + cooperative -- a
 queued job is dropped; a running job is flagged so the engine's progress callback aborts between
 denoise steps (a torch step is not externally interruptible). A box restart loses the in-memory job;
@@ -65,8 +65,8 @@ rather than polling a dead job forever.
 | Module | Role |
 |---|---|
 | `contract.py` | the i2v_clip job I/O + the shared R2 key conventions (identical to the datacenter backend's) |
-| `config.py` | the honest 16GB tier->engine mapping (`draft`/`standard`/`final` -> LTX configs) |
-| `vram.py` | a pure, conservative VRAM budgeter: does a config fit 16GB, and which offload it needs |
+| `config.py` | the honest 12GB tier->engine mapping (`draft`/`standard`/`final` -> LTX configs) |
+| `vram.py` | a pure, conservative VRAM budgeter: does a config fit 12GB, and which offload it needs |
 | `i2v_ltx.py` | the LTX engine: pure frame/dimension math (8k+1, /32) + the deferred-torch `animate` body |
 | `jobs.py` | the in-process async job registry (the RunPod-lifecycle stand-in) |
 | `server.py` | the RunPod-compatible HTTP server (pure `route()` + a stdlib http shell) + the i2v run_fn |
