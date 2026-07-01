@@ -86,6 +86,42 @@ def estimate(cfg: I2VConfig, *, card_gb: float = FLOOR_VRAM_GB) -> VramEstimate:
     )
 
 
+# --------------------------------------------------------------------------- VRAM cap (env-driven)
+# A REAL homelabber feature (not just a test hook): someone sharing one card between vivijure and other
+# workloads can BOUND how much VRAM this process claims, via VIVIJURE_MAX_VRAM_GB. The parse + fraction
+# math below is PURE (torch-free) so it unit-tests on a CPU box; the single torch call that enforces it
+# (torch.cuda.set_per_process_memory_fraction) lives at server startup (server.apply_vram_cap), applied
+# BEFORE any model load.
+
+MAX_VRAM_ENV = "VIVIJURE_MAX_VRAM_GB"
+
+
+def parse_max_vram_gb(raw: str | None) -> float | None:
+    """Parse the VIVIJURE_MAX_VRAM_GB env value to a GB cap. Unset / blank / non-numeric / <= 0 ALL mean
+    NO CAP (return None => use the whole card), so a mistyped value never silently strands the GPU at a
+    surprise fraction; it just falls back to the honest default of the full card."""
+    if raw is None:
+        return None
+    s = str(raw).strip()
+    if not s:
+        return None
+    try:
+        gb = float(s)
+    except (TypeError, ValueError):
+        return None
+    return gb if gb > 0 else None
+
+
+def vram_fraction(gb: float | None, total_gb: float) -> float | None:
+    """The per-process memory fraction a `gb` cap maps to on a `total_gb` device. None when uncapped
+    (gb is None) or the device total is unknown (<= 0). Clamped to (0, 1]: a cap at or above the card's
+    real size collapses to the full-card fraction 1.0 (asking for more than exists just means "all of
+    it"), never a value > 1.0 that torch would reject."""
+    if gb is None or gb <= 0 or total_gb <= 0:
+        return None
+    return min(1.0, gb / total_gb)
+
+
 def strongest_offload(cfg: I2VConfig, *, card_gb: float = FLOOR_VRAM_GB) -> Offload:
     """Pick the WEAKEST offload that still fits `cfg` on the card (weakest = fastest). Walk from NONE
     toward SEQUENTIAL and return the first that fits; if none fits, return SEQUENTIAL (the smallest

@@ -1,11 +1,12 @@
 # vivijure-local-backend runtime stack (the 16GB consumer door). LTX-Video image-to-video on a single
 # RTX 4060 Ti-class card, plus R2 object I/O. torch/torchvision are installed from the CUDA index in
-# deploy/Dockerfile (matched to the card's CUDA line), NOT pinned here. These are the SCAFFOLD pins;
-# the exact validated version set is fixed during the card benchmark (docs/live-benchmark-plan.md).
+# deploy/Dockerfile (matched to the card's CUDA line). diffusers/transformers are PINNED to the exact
+# set validated against torch 2.4.1 in the 12GB/16GB container proof: newer diffusers (0.38+) require a
+# newer torch and break on 2.4, and transformers 4.46.3 is the matching line for this diffusers release.
 
 # --- LTX-Video i2v engine (HuggingFace diffusers) ---
-diffusers>=0.32.0          # LTXImageToVideoPipeline (first-class LTX support)
-transformers>=4.44.0
+diffusers==0.32.2          # validated LTX release (LTXImageToVideoPipeline) on torch 2.4.1; 0.38+ breaks on 2.4
+transformers==4.46.3       # the transformers line validated with diffusers 0.32.2 on torch 2.4
 accelerate>=0.34.0         # enable_model_cpu_offload / enable_sequential_cpu_offload (the 16GB savers)
 safetensors>=0.4.5
 sentencepiece>=0.2.0       # LTX text encoder tokenizer
