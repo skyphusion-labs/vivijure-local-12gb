@@ -8,7 +8,7 @@
 diffusers==0.32.2          # validated LTX release (LTXImageToVideoPipeline) on torch 2.4.1; 0.38+ breaks on 2.4
 transformers==4.46.3       # the transformers line validated with diffusers 0.32.2 on torch 2.4
 accelerate>=0.34.0         # enable_model_cpu_offload / enable_sequential_cpu_offload (the 12GB savers)
-safetensors>=0.4.5
+safetensors>=0.8.0
 sentencepiece>=0.2.0       # LTX text encoder tokenizer
 imageio>=2.34.0
 imageio-ffmpeg>=0.5.1      # export_to_video
