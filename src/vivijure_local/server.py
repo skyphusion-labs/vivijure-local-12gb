@@ -58,7 +58,7 @@ def route(
     I/O of its own (the registry's run_fn does the work on its worker thread), so it unit-tests
     directly. Mirrors the RunPod envelope the local-gpu module expects."""
     if method == "GET" and path == "/health":
-        return 200, {"ok": True, "service": "vivijure-local-backend", "version": version, "engine": "ltx-video"}
+        return 200, {"ok": True, "service": "vivijure-local-12gb", "version": version, "engine": "ltx-video"}
 
     if method == "POST" and path == "/run":
         payload = (body or {}).get("input", body or {})
@@ -244,7 +244,7 @@ def serve(host: str = "0.0.0.0", port: int = 8000) -> None:
             pass
 
     httpd = ThreadingHTTPServer((host, port), Handler)
-    print(f"vivijure-local-backend serving on {host}:{port} (engine=ltx-video)", flush=True)
+    print(f"vivijure-local-12gb serving on {host}:{port} (engine=ltx-video)", flush=True)
     try:
         httpd.serve_forever()
     finally:
