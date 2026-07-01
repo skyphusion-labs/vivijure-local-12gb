@@ -10,3 +10,7 @@ __pycache__/
 # coverage artifacts (code-coverage.yml)
 .coverage
 coverage.xml
+
+# never commit a real .env (the quickstart is cp .env.example .env with your R2 creds)
+.env
+.dev.vars
