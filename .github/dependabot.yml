@@ -1,0 +1,20 @@
+# Dependabot config for vivijure-local-12gb.
+#
+# diffusers + transformers are PINNED to the 12GB-tier-validated LTX recipe (proven on real
+# hardware): diffusers==0.32.2 / transformers==4.46.3 on torch 2.4.1+cu124. diffusers 0.38+
+# breaks on torch 2.4 (its attention_dispatch custom_op needs torch>=2.5), and the transformers
+# line is tied to diffusers 0.32.2. Auto-bumping either breaks the build, so Dependabot ignores
+# them here; re-validate on real hardware before ever moving those pins by hand.
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    ignore:
+      - dependency-name: "diffusers"
+      - dependency-name: "transformers"
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
