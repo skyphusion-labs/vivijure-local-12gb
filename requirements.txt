@@ -11,7 +11,7 @@ accelerate>=0.34.0         # enable_model_cpu_offload / enable_sequential_cpu_of
 safetensors>=0.8.0
 sentencepiece>=0.2.0       # LTX text encoder tokenizer
 imageio>=2.37.3
-imageio-ffmpeg>=0.5.1      # export_to_video
+imageio-ffmpeg>=0.6.0      # export_to_video
 av>=17.1.0                 # frame-accurate clip write
 
 # --- object storage (shared vivijure R2 bucket) ---
