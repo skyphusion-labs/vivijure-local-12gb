@@ -162,15 +162,6 @@ motion.backend manifests so Joan's selector classification stops name-matching "
     omitted (selector falls back to config_schema, no fabricated ceilings).
   - tsc clean, full suite 1074 pass, #124 intact, local-gpu 18/18.
 
-**#123 backend identity-strip verification** (Mackaye asked: is it live on vivijure-backend?). FINDING:
-NOT live in prod. PR #123 is MERGED to vivijure-backend main (strip present in source: contract.py no
-longer parses user_email, handler.py no longer stamps it), BUT the latest release tag backend-v0.2.27
-STILL parses + stamps customMetadata.user_email -- the strip is in CHANGELOG "Unreleased." The backend
-deploys as a tag-triggered GHCR image -> RunPod endpoint, so the DEPLOYED image is still stamping
-user_email on every artifact. Closed in source, OPEN in production. Remediation: cut backend-v0.2.28 off
-main -> CI image build -> update the RunPod endpoint image. NOT cut by me (a backend release is a deploy;
-the release train is gated this pass). Flagged to Mackaye.
-
 ---
 
 ## PROOF GATE PASSED (2026-06-27): LTX i2v on the 16GB floor
