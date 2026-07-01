@@ -1,9 +1,9 @@
 # vivijure-local-backend runtime image (the 16GB consumer door).
 #
-# SCAFFOLD image. torch/torchvision install from the CUDA index matched to the card's driver line; the
-# exact validated pin set is fixed during the card benchmark (docs/live-benchmark-plan.md), mirroring
-# how vivijure-backend pins its pod-validated set. Built to run on the user's own box (a 4060 Ti is Ada
-# / CUDA 12.x), NOT on RunPod. Run it via docker-compose.yml (one command) or `docker run --gpus all`.
+# torch/torchvision install from the CUDA index matched to the card's driver line, PINNED to the set
+# validated in the 12GB/16GB container proof (torch 2.4.1 + torchvision 0.19.1 from cu124, paired with
+# diffusers 0.32.2 / transformers 4.46.3 in requirements.txt). Built to run on the user's own box (a
+# 4060 Ti is Ada / CUDA 12.x), NOT on RunPod. Run it via docker-compose.yml or `docker run --gpus all`.
 FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -17,8 +17,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# torch first, from the CUDA wheel index (Ada / cu124). Pin the exact version at benchmark time.
-RUN pip3 install --index-url https://download.pytorch.org/whl/cu124 torch torchvision
+# torch first, from the CUDA wheel index (Ada / cu124). Pinned to the proof-validated pair.
+RUN pip3 install --index-url https://download.pytorch.org/whl/cu124 torch==2.4.1 torchvision==0.19.1
 
 COPY requirements.txt /app/requirements.txt
 RUN pip3 install -r /app/requirements.txt

@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 
 from vivijure_local.jobs import JobRegistry
-from vivijure_local.server import build_i2v_run_fn, route, token_error
+from vivijure_local.server import apply_vram_cap, build_i2v_run_fn, route, token_error
 
 TOK = "s3cret-token"
 
@@ -36,6 +36,22 @@ def test_token_error_helper():
     assert token_error("wrong", TOK)[0] == 401           # mismatch -> 401
     assert token_error(None, TOK)[0] == 401              # missing -> 401
     assert token_error(TOK, "")[0] == 503                # no token configured -> 503 (refuse open)
+
+
+def test_apply_vram_cap_is_a_noop_when_unset(monkeypatch):
+    # Unset env: no-op, returns None, and never even imports torch (so it is safe on the CPU CI box).
+    monkeypatch.delenv("VIVIJURE_MAX_VRAM_GB", raising=False)
+    logs = []
+    assert apply_vram_cap(logger=logs.append) is None
+    assert logs == []
+
+
+def test_apply_vram_cap_is_a_noop_without_cuda(monkeypatch):
+    # Env set but no torch/CUDA on the CPU CI box: still a no-op (never raises, never logs a false cap).
+    monkeypatch.setenv("VIVIJURE_MAX_VRAM_GB", "11")
+    logs = []
+    assert apply_vram_cap(logger=logs.append) is None
+    assert logs == []
 
 
 def test_i2v_run_refuses_when_no_token_configured_503():

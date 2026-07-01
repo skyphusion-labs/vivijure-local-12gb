@@ -159,6 +159,41 @@ def build_i2v_run_fn(store, *, workdir: Path | None = None) -> Callable[[dict, C
     return run
 
 
+# --------------------------------------------------------------------------- VRAM cap (startup)
+
+def apply_vram_cap(logger=None) -> float | None:
+    """Bound this process's VRAM to VIVIJURE_MAX_VRAM_GB, if set, BEFORE any model loads.
+
+    A homelabber sharing one GPU between vivijure and other workloads can cap how much VRAM this process
+    is allowed to claim. When the env is set AND CUDA is present, translate the GB cap into torch's
+    per-process memory fraction on the active device and pin it, so an over-eager pipeline can never grab
+    the whole card. Unset / blank / non-numeric / CPU-only => no-op (the full card, the honest default).
+
+    Returns the applied fraction, or None when it was a no-op, so the caller (and the proof) can assert
+    on it. The parse + fraction math is the PURE vram.* helpers (CPU-tested); only the enforcement here
+    touches torch, and torch is deferred so this module stays CPU-importable."""
+    log = logger or (lambda m: print(m, flush=True))
+    from . import vram
+
+    gb = vram.parse_max_vram_gb(os.environ.get(vram.MAX_VRAM_ENV))
+    if gb is None:
+        return None  # unset / blank / junk: full card
+    try:
+        import torch  # deferred: only present in the GPU runtime image
+    except Exception:
+        return None
+    if not torch.cuda.is_available():
+        return None  # CPU-only box: nothing to cap
+    device_index = torch.cuda.current_device()
+    total_gb = torch.cuda.get_device_properties(device_index).total_memory / (1024 ** 3)
+    fraction = vram.vram_fraction(gb, total_gb)
+    if fraction is None:
+        return None
+    torch.cuda.set_per_process_memory_fraction(fraction, device_index)
+    log(f"VRAM capped to {gb}GB ({fraction:.3f} of {total_gb:.1f}GB)")
+    return fraction
+
+
 # --------------------------------------------------------------------------- HTTP shell
 
 def serve(host: str = "0.0.0.0", port: int = 8000) -> None:
@@ -168,6 +203,7 @@ def serve(host: str = "0.0.0.0", port: int = 8000) -> None:
 
     from .r2 import R2, R2Config  # deferred: boto3 lives only in the GPU runtime image
 
+    apply_vram_cap()  # honor VIVIJURE_MAX_VRAM_GB before anything can touch the GPU
     expected_token = os.environ.get("LOCAL_BACKEND_TOKEN", "") or ""
     store = R2(R2Config.from_env())
     registry = JobRegistry(build_i2v_run_fn(store))

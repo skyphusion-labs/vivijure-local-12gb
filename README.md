@@ -29,6 +29,18 @@ homelabber walkthrough (prereqs, tunnel, honest trade-offs, troubleshooting) is
 
 Needs an NVIDIA GPU (16GB+) + the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html).
 
+## Configuration (`.env`)
+
+Copy `.env.example` to `.env` and fill it in. Every setting is an environment variable:
+
+| Var | Required | Default | What it does |
+|---|---|---|---|
+| `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` | yes | -- | The one credential: the shared-R2 key (read the keyframe, write the clip). Scope it to the bucket. |
+| `R2_BUCKET` | no | `vivijure` | The shared bucket name. |
+| `LOCAL_BACKEND_TOKEN` | no | auto-generated | The bearer token every i2v request must carry (the tunnel is public). Blank => a strong one is generated and printed in the banner; set it for a stable token across restarts. |
+| `TUNNEL_TOKEN` | no | quick tunnel | A Cloudflare named-tunnel token for a STABLE hostname. Blank => a zero-config TryCloudflare quick tunnel (URL changes each restart). |
+| `VIVIJURE_MAX_VRAM_GB` | no | full card | Cap the VRAM vivijure claims, in GB, when you share the card with other workloads. The backend pins torch to that fraction of the card at startup. Blank (or a value >= your card's size) => use the whole card. |
+
 ## What it runs
 
 **LTX-Video**, selected over CogVideoX / SVD / AnimateDiff for the 16GB floor on fit + speed + license

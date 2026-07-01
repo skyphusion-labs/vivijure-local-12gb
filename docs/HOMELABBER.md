@@ -74,6 +74,23 @@ The quickstart uses a free quick tunnel: zero setup, but the URL changes each re
 tunnel and put its token in `.env` as `TUNNEL_TOKEN` -- the stack uses it automatically. A stable
 `LOCAL_BACKEND_TOKEN` (instead of the auto-generated one) goes in `.env` the same way.
 
+### Sharing your GPU (cap the VRAM)
+
+If this card is also driving your display, running another model, or you just want to leave headroom
+for other work, you can bound how much VRAM vivijure is allowed to take. Set `VIVIJURE_MAX_VRAM_GB` in
+`.env` to the maximum in GB, and the backend pins itself to that slice of the card at startup -- it can
+never grab the whole thing.
+
+```sh
+# on a 16GB card, keep vivijure under 11GB and leave ~5GB for everything else
+VIVIJURE_MAX_VRAM_GB=11
+```
+
+Leave it blank to use the whole card (the default). A value at or above your card's real size is the
+same as leaving it blank. Note the cap is a ceiling, not a discount: if you set it below what a tier
+actually needs, that tier will OOM -- drop to a lower tier (`final` -> `standard` -> `draft`) or raise
+the cap. The startup log prints the applied cap, e.g. `VRAM capped to 11.0GB (0.688 of 16.0GB)`.
+
 ### Troubleshooting
 
 - **"no CUDA device" / the backend never goes LIVE:** the container can't see your GPU. Install the
