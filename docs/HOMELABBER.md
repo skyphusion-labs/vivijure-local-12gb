@@ -5,13 +5,13 @@ bill, no account to sign up for. One command and you're rendering.
 
 ## Quickstart (you'll be rendering in minutes)
 
-You need: an NVIDIA GPU with **16GB+ VRAM** (RTX 4060 Ti 16GB or better), **Docker**, and the
+You need: an NVIDIA GPU with **12GB+ VRAM** (RTX 3060 12GB, RTX 4070 / 4070 Ti, or better), **Docker**, and the
 [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)
 (one install so the container can see your GPU). That's it.
 
 ```sh
-git clone https://github.com/skyphusion-labs/vivijure-local-backend
-cd vivijure-local-backend
+git clone https://github.com/skyphusion-labs/vivijure-local-12gb
+cd vivijure-local-12gb
 docker compose up
 ```
 
@@ -49,7 +49,7 @@ You ran the **local door** -- rendering on hardware you own. The studio also has
 | | Local door (you) | Datacenter door |
 |---|---|---|
 | Cost | **Free after hardware** (your power) | Pay per render second |
-| Hardware | your own 16GB+ card | H200 / B200 class |
+| Hardware | your own 12GB+ card | H200 / B200 class |
 | Ceiling | ~768x512, ~5s clips (LTX-Video) | higher res / longer (Wan 2.2) |
 | Setup | one command on your box | nothing (it's hosted) |
 
@@ -58,7 +58,7 @@ pipeline and render for the cost of electricity, you're in the right place.
 
 ### Quality tiers (what your card honestly delivers)
 
-The studio's three tiers map to settings your 16GB card can actually run. `final` here is YOUR card's
+The studio's three tiers map to settings your 12GB card can actually run. `final` here is YOUR card's
 honest ceiling, not datacenter parity. Measured on a 16GB Ada card (`docs/proof/RESULTS.md`):
 
 | Tier | Resolution | Length | Speed feel |
@@ -82,14 +82,14 @@ for other work, you can bound how much VRAM vivijure is allowed to take. Set `VI
 never grab the whole thing.
 
 ```sh
-# on a 16GB card, keep vivijure under 11GB and leave ~5GB for everything else
+# on a 12GB card, keep vivijure under 11GB and leave ~1GB for everything else
 VIVIJURE_MAX_VRAM_GB=11
 ```
 
 Leave it blank to use the whole card (the default). A value at or above your card's real size is the
 same as leaving it blank. Note the cap is a ceiling, not a discount: if you set it below what a tier
 actually needs, that tier will OOM -- drop to a lower tier (`final` -> `standard` -> `draft`) or raise
-the cap. The startup log prints the applied cap, e.g. `VRAM capped to 11.0GB (0.688 of 16.0GB)`.
+the cap. The startup log prints the applied cap, e.g. `VRAM capped to 11.0GB (0.917 of 12.0GB)`.
 
 ### Troubleshooting
 
@@ -97,7 +97,7 @@ the cap. The startup log prints the applied cap, e.g. `VRAM capped to 11.0GB (0.
   NVIDIA Container Toolkit and confirm `docker run --rm --gpus all nvidia/cuda:12.4.1-base-ubuntu22.04 nvidia-smi`
   works, then `docker compose up` again.
 - **A render fails with out-of-memory:** drop to a lower tier (`final` -> `standard` -> `draft`). The
-  backend already uses CPU offload + VAE tiling to fit 16GB; a marginal card may need the lighter tier.
+  backend already uses CPU offload + VAE tiling to fit 12GB; a marginal card may need the lighter tier.
   24GB+ cards have headroom for the top tier.
 - **First render is slow:** that's the one-time model download populating the cache; later renders are fast.
 - **Studio can't reach it:** re-check the Backend URL + token from the banner
@@ -105,8 +105,8 @@ the cap. The startup log prints the applied cap, e.g. `VRAM capped to 11.0GB (0.
 
 ### What's next
 
-This backend runs the base LTX-Video i2v today. Coming: a higher-quality 13B tier (the 6GB of VRAM
-headroom on a 16GB card makes room for it), and the rest of the studio's module system to grow into.
+This backend runs the base LTX-Video i2v today. Coming: a higher-quality 13B tier (which 16GB+ cards
+have the VRAM headroom for), and the rest of the studio's module system to grow into.
 
 ## License
 

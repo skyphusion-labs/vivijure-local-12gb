@@ -1,9 +1,9 @@
-"""Consumer-scoped render config for the local backend (the 16GB door).
+"""Consumer-scoped render config for the local backend (the 12GB door).
 
 This is the honest counterpart to vivijure-backend's `config.py`. The datacenter backend maps the
 quality tiers (draft / standard / final) onto Wan 2.2 A14B step counts and datacenter GPU classes
 (RTX PRO 6000 / H200 / B200). THIS backend maps the SAME tier vocabulary onto LTX-Video engine
-configs a single RTX 4060 Ti 16GB card can ACTUALLY run -- so "final" here is the card's honest
+configs a single 12GB consumer card can ACTUALLY run -- so "final" here is the card's honest
 ceiling, NOT datacenter parity.
 
 Why the tiers keep the same names: the control plane owns the tier set (QUALITY_TIERS) and INJECTS
@@ -12,7 +12,7 @@ injected value not in the module's enum, so the local-gpu module's enum stays dr
 (see vivijure/tests/quality-tier-drift.test.ts, #124). The HONESTY is in the engine mapping below and
 in `docs/i2v-model-selection.md`, not in renaming the tiers.
 
-These numbers are SCAFFOLD DEFAULTS. The resolution / frame / step ceilings that genuinely fit 16GB
+These numbers are SCAFFOLD DEFAULTS. The resolution / frame / step ceilings that genuinely fit 12GB
 can only be finalized by a live benchmark on real silicon (docs/live-benchmark-plan.md); until then
 they are conservative and tunable via env. Nothing here trains or generates; this module is pure +
 CPU-importable (no torch), exactly like vivijure-backend's config.py.
@@ -46,10 +46,10 @@ class Offload(str, Enum):
 
     NONE = "none"                      # everything resident on the GPU (fastest; only the lightest config)
     MODEL_CPU_OFFLOAD = "model"        # whole submodules paged to CPU between uses (diffusers enable_model_cpu_offload)
-    SEQUENTIAL_CPU_OFFLOAD = "sequential"  # per-layer paging (slowest, smallest footprint; the 16GB fallback)
+    SEQUENTIAL_CPU_OFFLOAD = "sequential"  # per-layer paging (slowest, smallest footprint; the 12GB fallback)
 
 
-# LTX model variants we target on a 16GB card. The 2B-distilled is the lightest real i2v and the
+# LTX model variants we target on a 12GB card. The 2B-distilled is the lightest real i2v and the
 # default; the 13B-fp8-distilled is the quality ceiling that still fits Ada 16GB (fp8 is an Ada
 # feature -- the 4060 Ti is Ada). See docs/i2v-model-selection.md for the comparison that chose LTX.
 # Benchmark-VALIDATED on a 16GB card (docs/proof/RESULTS.md): the base LTX i2v via
@@ -61,7 +61,7 @@ LTX_BASE = "Lightricks/LTX-Video"
 
 @dataclass(frozen=True)
 class TierConfig:
-    """The engine knobs one quality tier maps to on a 16GB card. The animate() body reads these; the
+    """The engine knobs one quality tier maps to on a 12GB card. The animate() body reads these; the
     frame-count is derived per shot (config.py never fixes a film's length)."""
 
     model: str
@@ -71,10 +71,10 @@ class TierConfig:
     height: int
     max_frames: int        # ceiling for this tier (snapped to 8k+1 by i2v_ltx.snap_frames)
     offload: Offload
-    vae_tiling: bool       # decode the VAE in tiles to bound peak decode VRAM (the big 16GB saver)
+    vae_tiling: bool       # decode the VAE in tiles to bound peak decode VRAM (the big 12GB saver)
 
 
-# The honest 16GB ladder, VALIDATED on an RTX 2000 Ada 16GB (docs/proof/RESULTS.md): peak ~10.4GB
+# The honest 12GB ladder, VALIDATED on an RTX 2000 Ada 16GB (docs/proof/RESULTS.md): peak ~10.4GB
 # at draft + standard with model-cpu-offload + VAE tiling. Same base model per tier; the tiers differ
 # by resolution + steps (speed vs fidelity). The heavier 13B path is a documented follow-up.
 _TIERS: dict[QualityTier, TierConfig] = {
@@ -89,7 +89,7 @@ _TIERS: dict[QualityTier, TierConfig] = {
         width=704, height=512, max_frames=121, offload=Offload.MODEL_CPU_OFFLOAD, vae_tiling=True,
     ),
     # The card's HONEST ceiling: the base model at a higher resolution + more steps (still ~10.5GB,
-    # fits 16GB with headroom). NOT datacenter parity; the 13B path is the future quality tier.
+    # fits a 12GB card). NOT datacenter parity; the 13B path is the future quality tier.
     QualityTier.FINAL: TierConfig(
         model=LTX_BASE, steps=50, guidance_scale=3.0,
         width=768, height=512, max_frames=121, offload=Offload.MODEL_CPU_OFFLOAD, vae_tiling=True,

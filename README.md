@@ -1,7 +1,7 @@
-# vivijure-local-backend
+# vivijure-local-12gb
 
-The **local-consumer** render backend for Vivijure: image-to-video on a **single consumer GPU** (the
-RTX 4060 Ti 16GB floor) running in your own homelab. The deliberate opposite of
+The **local-consumer** render backend for Vivijure: image-to-video on a **single consumer GPU** (a
+**12GB floor, proven**; e.g. RTX 3060 12GB, RTX 4070, RTX 4070 Ti) running in your own homelab. The deliberate opposite of
 [vivijure-backend](https://github.com/skyphusion-labs/vivijure-backend) (the RunPod datacenter engine,
 Wan 2.2 on H200/B200).
 
@@ -11,7 +11,7 @@ already own. This backend is the second door -- no rent, no cloud GPU at all, re
 tunnel that terminates at the box.
 
 ```
-control plane --> local-gpu module (CF Worker) --/run--> tunnel --> THIS backend (LTX-Video, RTX 4060 Ti 16GB)
+control plane --> local-gpu module (CF Worker) --/run--> tunnel --> THIS backend (LTX-Video, 12GB consumer GPU)
 ```
 
 ## Run it on your own box (one command)
@@ -27,7 +27,7 @@ homelabber walkthrough (prereqs, tunnel, honest trade-offs, troubleshooting) is
 **[docs/HOMELABBER.md](docs/HOMELABBER.md)**; the studio-side wiring is
 **[docs/INTEGRATION.md](docs/INTEGRATION.md)**.
 
-Needs an NVIDIA GPU (16GB+) + the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html).
+Needs an NVIDIA GPU (12GB+) + the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html).
 
 ## Configuration (`.env`)
 
@@ -43,10 +43,10 @@ Copy `.env.example` to `.env` and fill it in. Every setting is an environment va
 
 ## What it runs
 
-**LTX-Video**, selected over CogVideoX / SVD / AnimateDiff for the 16GB floor on fit + speed + license
+**LTX-Video**, selected over CogVideoX / SVD / AnimateDiff for the 12GB floor on fit + speed + license
 (the dry comparison is [docs/i2v-model-selection.md](docs/i2v-model-selection.md)): the lightest real
 i2v model, few-step distilled (fast on a consumer card), and the cleanest license for a freely-given
-AGPL project. The three quality tiers map to LTX configs a 16GB card can honestly deliver -- `final` is
+AGPL project. The three quality tiers map to LTX configs a 12GB card can honestly deliver -- `final` is
 the card's honest ceiling, not datacenter parity.
 
 | Tier | Resolution | Frames | Steps | Peak VRAM (11GB cap) | sec/clip |
