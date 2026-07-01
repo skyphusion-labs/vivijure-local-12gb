@@ -49,15 +49,20 @@ i2v model, few-step distilled (fast on a consumer card), and the cleanest licens
 AGPL project. The three quality tiers map to LTX configs a 16GB card can honestly deliver -- `final` is
 the card's honest ceiling, not datacenter parity.
 
-| Tier | Model | Resolution | Frames | Offload |
-|---|---|---|---|---|
-| `draft` | LTX-Video (base) | 512x320 | 97 | model CPU offload + VAE tiling |
-| `standard` | LTX-Video (base) | 704x512 | 121 (~5s) | model CPU offload + VAE tiling |
-| `final` | LTX-Video (base) | 768x512 | 121 | model CPU offload + VAE tiling |
+| Tier | Resolution | Frames | Steps | Peak VRAM (11GB cap) | sec/clip |
+|---|---|---|---|---|---|
+| `draft` | 512x320 | 97 | 25 | ~9.76 GB | 48.6s |
+| `standard` | 704x512 | 121 (~5s) | 40 | ~9.78 GB | 132.0s |
+| `final` | 768x512 | 121 (~5s) | 50 | ~9.78 GB | 171.6s |
 
-> VALIDATED on a 16GB Ada card ([docs/proof/RESULTS.md](docs/proof/RESULTS.md)): peak ~10.4GB (no OOM,
-> ~6GB headroom), draft 38.6s/clip, standard 125.6s/clip. The few-step distilled + 13B "final" path
-> (better quality/faster, via LTXConditionPipeline) is a follow-up; the base i2v above is proven.
+All tiers use LTX-Video (base) with model-CPU-offload + VAE tiling.
+
+> VALIDATED on the real shipped container at a **12GB VRAM budget** (`VIVIJURE_MAX_VRAM_GB=11` on a
+> 15.7GB Ada card; [docs/proof/RESULTS.md](docs/proof/RESULTS.md)): all three tiers render with **NO
+> OOM** at ~9.78GB peak reserved (~1.2GB headroom), cold load 34.4s. `final` (768x512 / 121f / 50 steps)
+> is now proven. Peak is FLAT across tiers (offload + VAE tiling bound it), so higher tiers cost time,
+> not VRAM. Verified two ways: the engine directly AND the live `/run` + R2 path. The few-step distilled
+> + 13B path (better quality, via LTXConditionPipeline) is a follow-up; the base i2v above is proven.
 
 ## The job API (RunPod-compatible)
 
