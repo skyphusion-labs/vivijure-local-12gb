@@ -1,22 +1,34 @@
 # Make films on your own GPU
 
-Vivijure's motion engine (image-to-video), running on **your** graphics card. No cloud, no per-render
-bill, no account to sign up for. One command and you're rendering.
+Vivijure's motion engine (image-to-video), running on **your** graphics card. No cloud GPU, no
+per-render bill. One setup step (your studio's R2 storage credentials), one command, and you're
+rendering.
 
 ## Quickstart (you'll be rendering in minutes)
 
-You need: an NVIDIA GPU with **12GB+ VRAM** (RTX 3060 12GB, RTX 4070 / 4070 Ti, or better), **Docker**, and the
+You need: an NVIDIA GPU with **12GB+ VRAM** (RTX 3060 12GB, RTX 4070 / 4070 Ti, or better), an
+NVIDIA driver **550 or newer**, **Docker**, the
 [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)
-(one install so the container can see your GPU). That's it.
+(one install so the container can see your GPU), and about **25GB of free disk** (container image +
+model weights). That's it.
+
+ONE setup step before you start: your Vivijure studio's Cloudflare R2 credentials (this backend shares
+that bucket -- it reads the keyframe and writes the finished clip there). Get them from the Cloudflare
+dashboard -> R2 -> Manage R2 API Tokens, scoped to your bucket.
 
 ```sh
 git clone https://github.com/skyphusion-labs/vivijure-local-12gb
 cd vivijure-local-12gb
+cp .env.example .env
+# edit .env: set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY (R2_BUCKET defaults to "vivijure")
 docker compose up
 ```
 
-That's the whole setup. The stack starts your render backend, opens its own secure tunnel, downloads
-the model once, and then prints a banner like this:
+(Forgot the R2 creds? The backend prints a plain message telling you exactly what to set -- not a stack
+trace -- and you just run `docker compose up` again.)
+
+That's the whole setup. The stack starts your render backend, opens its own secure tunnel, and
+prints a banner like this:
 
 ```
 ================================================================
@@ -31,6 +43,9 @@ the model once, and then prints a banner like this:
 
 **Copy those two values into your Vivijure studio's "Local (your GPU)" door, pick it, and render.**
 A real clip comes back from your own card. That's it -- you just made a film on your own GPU.
+
+One honest heads-up: your **first render** also downloads the LTX-Video weights (~10GB, one time), so
+it takes several extra minutes. Later renders skip the download.
 
 (No tunnel to configure, no account, no networking to understand. The tunnel is built in and invisible;
 the URL + token in the banner are all you touch.)
@@ -59,13 +74,14 @@ pipeline and render for the cost of electricity, you're in the right place.
 ### Quality tiers (what your card honestly delivers)
 
 The studio's three tiers map to settings your 12GB card can actually run. `final` here is YOUR card's
-honest ceiling, not datacenter parity. Measured on a 16GB Ada card (`docs/proof/RESULTS.md`):
+honest ceiling, not datacenter parity. Measured on the shipped container under an 11GB VRAM cap, the
+honest 12GB budget (`docs/proof/RESULTS.md`):
 
 | Tier | Resolution | Length | Speed feel |
 |---|---|---|---|
-| draft | 512x320 | ~4s | fastest preview (~39s/clip) |
-| standard | 704x512 | ~5s | the everyday tier (~2min/clip) |
-| final | 768x512 | ~5s | best base quality (slower) |
+| draft | 512x320 | ~4s | fastest preview (~49s/clip) |
+| standard | 704x512 | ~5s | the everyday tier (~2.2min/clip) |
+| final | 768x512 | ~5s | best base quality (~2.9min/clip) |
 
 ### A stable address (named tunnel)
 
@@ -99,7 +115,8 @@ the cap. The startup log prints the applied cap, e.g. `VRAM capped to 11.0GB (0.
 - **A render fails with out-of-memory:** drop to a lower tier (`final` -> `standard` -> `draft`). The
   backend already uses CPU offload + VAE tiling to fit 12GB; a marginal card may need the lighter tier.
   24GB+ cards have headroom for the top tier.
-- **First render is slow:** that's the one-time model download populating the cache; later renders are fast.
+- **First render is slow:** that's the one-time model download (~10GB) populating the cache; expect
+  several extra minutes on the first render only. Later renders are fast.
 - **Studio can't reach it:** re-check the Backend URL + token from the banner
   (`docker compose logs ready`) match what you pasted into the studio.
 

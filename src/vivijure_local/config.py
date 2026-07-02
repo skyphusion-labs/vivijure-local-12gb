@@ -20,7 +20,7 @@ CPU-importable (no torch), exactly like vivijure-backend's config.py.
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from enum import Enum
 
 
@@ -52,8 +52,8 @@ class Offload(str, Enum):
 # LTX model variants we target on a 12GB card. The 2B-distilled is the lightest real i2v and the
 # default; the 13B-fp8-distilled is the quality ceiling that still fits Ada 16GB (fp8 is an Ada
 # feature -- the 4060 Ti is Ada). See docs/i2v-model-selection.md for the comparison that chose LTX.
-# Benchmark-VALIDATED on a 16GB card (docs/proof/RESULTS.md): the base LTX i2v via
-# LTXImageToVideoPipeline runs at ~10.4GB peak with model-cpu-offload + VAE tiling -- ~6GB headroom.
+# Benchmark-VALIDATED under an 11GB VRAM cap, the honest 12GB budget (docs/proof/RESULTS.md): the
+# base LTX i2v via LTXImageToVideoPipeline peaks at ~9.78GB reserved with model-cpu-offload + VAE tiling.
 # This is the proven path. The few-step distilled + 13B variants load via a DIFFERENT pipeline class
 # (LTXConditionPipeline + the spatial upscaler) and are a quality FOLLOW-UP, not wired yet.
 LTX_BASE = "Lightricks/LTX-Video"
@@ -74,22 +74,24 @@ class TierConfig:
     vae_tiling: bool       # decode the VAE in tiles to bound peak decode VRAM (the big 12GB saver)
 
 
-# The honest 12GB ladder, VALIDATED on an RTX 2000 Ada 16GB (docs/proof/RESULTS.md): peak ~10.4GB
-# at draft + standard with model-cpu-offload + VAE tiling. Same base model per tier; the tiers differ
-# by resolution + steps (speed vs fidelity). The heavier 13B path is a documented follow-up.
+# The honest 12GB ladder, VALIDATED on the shipped container under an 11GB VRAM cap
+# (docs/proof/RESULTS.md): ALL THREE tiers pass, peak ~9.78GB reserved with model-cpu-offload + VAE
+# tiling. Same base model per tier; the tiers differ by resolution + steps (speed vs fidelity). The
+# heavier 13B path is a documented follow-up.
 _TIERS: dict[QualityTier, TierConfig] = {
-    # Fast preview: measured 38.6s/clip, peak 10.44GB on a 16GB Ada (docs/proof).
+    # Fast preview: measured 48.6s/clip, peak 9.76GB reserved under the 11GB cap (docs/proof).
     QualityTier.DRAFT: TierConfig(
         model=LTX_BASE, steps=25, guidance_scale=3.0,
         width=512, height=320, max_frames=97, offload=Offload.MODEL_CPU_OFFLOAD, vae_tiling=True,
     ),
-    # The comfortable middle: measured 125.6s/clip, peak 10.46GB on a 16GB Ada (docs/proof).
+    # The comfortable middle: measured 132.0s/clip, peak 9.78GB reserved under the 11GB cap (docs/proof).
     QualityTier.STANDARD: TierConfig(
         model=LTX_BASE, steps=40, guidance_scale=3.0,
         width=704, height=512, max_frames=121, offload=Offload.MODEL_CPU_OFFLOAD, vae_tiling=True,
     ),
-    # The card's HONEST ceiling: the base model at a higher resolution + more steps (still ~10.5GB,
-    # fits a 12GB card). NOT datacenter parity; the 13B path is the future quality tier.
+    # The card's HONEST ceiling: the base model at a higher resolution + more steps. Measured
+    # 171.6s/clip, peak 9.78GB reserved under the 11GB cap (docs/proof). NOT datacenter parity; the
+    # 13B path is the future quality tier.
     QualityTier.FINAL: TierConfig(
         model=LTX_BASE, steps=50, guidance_scale=3.0,
         width=768, height=512, max_frames=121, offload=Offload.MODEL_CPU_OFFLOAD, vae_tiling=True,
@@ -149,11 +151,6 @@ class I2VConfig:
             flow_shift=flow_shift, offload=base.offload, vae_tiling=base.vae_tiling,
             negative_prompt=str(cfg.get("negative_prompt") or ""),
         )
-
-    def with_dims(self, width: int, height: int) -> "I2VConfig":
-        """Return a copy following the keyframe's native dims (clamped to the tier ceiling), used when
-        the engine probes the actual keyframe size."""
-        return replace(self, width=min(self.width, width), height=min(self.height, height))
 
 
 def tier_config(tier: QualityTier) -> TierConfig:

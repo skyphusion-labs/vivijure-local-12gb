@@ -75,17 +75,23 @@ The full map, the same one every constellation repo shows, and how to read it, i
 ## Run it on your own box (one command)
 
 ```sh
-cp .env.example .env        # your R2 creds (+ optional LOCAL_BACKEND_TOKEN)
-docker compose up -d        # first start caches the LTX weights, then serves :8000
-curl localhost:8000/health  # {"ok":true,"engine":"ltx-video",...}
+cp .env.example .env         # then edit: your R2 creds (+ optional LOCAL_BACKEND_TOKEN)
+docker compose up -d         # starts the server + its own tunnel (:8000 stays inside the compose network)
+docker compose logs ready    # the banner: your Backend URL + token, copy-paste ready
 ```
 
-Then expose `:8000` over a Cloudflare tunnel and point your studio's `local-gpu` module at it. The full
+Your FIRST render downloads the LTX-Video weights (~10GB, once) into the models volume, so it takes
+several extra minutes; later renders skip the download.
+
+The stack opens its own Cloudflare tunnel; point your studio's `local-gpu` module at the banner's
+URL + token. The full
 homelabber walkthrough (prereqs, tunnel, honest trade-offs, troubleshooting) is
 **[docs/HOMELABBER.md](docs/HOMELABBER.md)**; the studio-side wiring is
 **[docs/INTEGRATION.md](docs/INTEGRATION.md)**.
 
-Needs an NVIDIA GPU (12GB+) + the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html).
+Needs an NVIDIA GPU (12GB+), an NVIDIA driver 550 or newer (the runtime is CUDA 12.4), the
+[NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html),
+and about 25GB of free disk (a ~10GB container image + the ~10GB LTX weights).
 
 ## Configuration (`.env`)
 

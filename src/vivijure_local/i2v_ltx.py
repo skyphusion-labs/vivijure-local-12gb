@@ -68,7 +68,7 @@ def clip_seconds(num_frames: int, fps: int = DEFAULT_FPS) -> float:
 def resolve_engine_dims(cfg: I2VConfig) -> tuple[int, int, int]:
     """The (width, height, num_frames) actually fed to the pipeline: tier dims snapped to /32 and the
     frame count snapped to 8k+1 under the tier ceiling. Pure, so the server can report the realized
-    shape (and the VRAM estimate can use it) before any GPU work."""
+    shape before any GPU work."""
     return snap_dim(cfg.width), snap_dim(cfg.height), snap_frames(cfg.num_frames)
 
 
