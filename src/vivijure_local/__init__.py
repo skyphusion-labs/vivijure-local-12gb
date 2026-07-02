@@ -1,4 +1,4 @@
-"""vivijure-local-12gb: the local-consumer render engine (the 16GB door).
+"""vivijure-local-12gb: the local-consumer render engine (the 12GB door).
 
 The deliberate opposite of vivijure-backend (the RunPod datacenter engine). Runs LTX-Video image-to-
 video on a single consumer GPU (a 12GB floor, proven) and speaks the SAME i2v_clip job contract, so

@@ -68,7 +68,7 @@ def clip_seconds(num_frames: int, fps: int = DEFAULT_FPS) -> float:
 def resolve_engine_dims(cfg: I2VConfig) -> tuple[int, int, int]:
     """The (width, height, num_frames) actually fed to the pipeline: tier dims snapped to /32 and the
     frame count snapped to 8k+1 under the tier ceiling. Pure, so the server can report the realized
-    shape (and the VRAM estimate can use it) before any GPU work."""
+    shape before any GPU work."""
     return snap_dim(cfg.width), snap_dim(cfg.height), snap_frames(cfg.num_frames)
 
 
@@ -97,10 +97,9 @@ def animate(shot_id: str, keyframe: Path, prompt: str, cfg: I2VConfig, out_path:
     docs/live-benchmark-plan.md). The offload mode from `cfg` is applied to the pipeline so the run
     fits the 12GB budget; `progress_cb(step, total)` is wired best-effort through diffusers' callback hook.
 
-    NOTE: this is the SCAFFOLD body. It encodes the intended call shape and the 12GB offload wiring;
-    the exact pipeline kwargs (LTX revision, conditioning argument name) are pinned against the deployed
-    diffusers version during the card benchmark. It raises if torch/diffusers is absent rather than
-    pretending to render (a producer stage never fakes output)."""
+    VALIDATED on the card (docs/proof/RESULTS.md, diffusers 0.32.2): this exact call shape and the
+    12GB offload wiring passed all three tiers under the 11GB cap. It raises if torch/diffusers is
+    absent rather than pretending to render (a producer stage never fakes output)."""
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 

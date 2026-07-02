@@ -60,11 +60,11 @@ def main() -> int:
     named = bool(os.environ.get("TUNNEL_TOKEN"))
 
     token = _wait(_token, 300) or "(check `docker compose logs vivijure-local-12gb`)"
-    healthy = _wait(lambda: _healthy(backend), 600)  # first boot pulls ~10GB of weights; be patient
+    healthy = _wait(lambda: _healthy(backend), 600)  # generous: server + tunnel are up in ~a minute; weights pull on the FIRST RENDER, not here
     url = "(your configured named-tunnel hostname)" if named else (_wait(_quick_url, 300) or "(check `docker compose logs cloudflared`)")
 
     line = "=" * 64
-    status = "LIVE" if healthy else "starting (model still downloading -- it will be LIVE shortly)"
+    status = "LIVE" if healthy else "starting (not answering /health yet -- check `docker compose logs vivijure-local-12gb`)"
     print("\n" + line, flush=True)
     print(f"  Vivijure local backend is {status}", flush=True)
     print("", flush=True)
@@ -73,6 +73,9 @@ def main() -> int:
     print("", flush=True)
     print('  -> Paste these into your Vivijure studio\'s "Local (your GPU)" door', flush=True)
     print("     (LOCAL_BACKEND_URL + LOCAL_BACKEND_TOKEN). That is the whole setup.", flush=True)
+    print("", flush=True)
+    print("  Heads up: your FIRST render also downloads the LTX-Video weights (~10GB,", flush=True)
+    print("  one time), so it takes several extra minutes. Later renders skip it.", flush=True)
     print(line + "\n", flush=True)
 
     # Idle so `docker compose logs ready` always shows the banner (don't exit -> don't churn-restart).
