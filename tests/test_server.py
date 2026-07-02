@@ -173,3 +173,17 @@ def test_preflight_r2_exits_with_plain_message_when_missing(monkeypatch):
     assert "R2 credentials are not set" in blob
     assert "docker compose up" in blob            # actionable next step
     assert "R2_ACCOUNT_ID" in blob                # names which var is missing (not its value)
+
+
+def test_health_version_tracks_package_version():
+    # Drift guard: route()'s default version derives from __init__.__version__, so /health can never
+    # report a stale hardcoded literal after a version bump.
+    from vivijure_local import __version__
+    code, body = route("GET", "/health", None, registry=_reg(), token=None, expected_token=TOK)
+    assert code == 200 and body["version"] == __version__
+
+
+def test_token_compare_rejects_equal_length_wrong_token():
+    # Timing-safe compare (hmac.compare_digest) still rejects a same-length wrong token as 401.
+    assert token_error("s3cret-tokeX", TOK)[0] == 401
+    assert token_error(TOK, TOK) is None
