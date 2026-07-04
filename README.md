@@ -84,6 +84,11 @@ docker compose logs ready    # the banner: your Backend URL + token, copy-paste 
 (no local build; that is the whole ease-of-install point). Prefer to build from source? Run
 `docker compose up -d --build` instead and compose builds `deploy/Dockerfile` locally.
 
+To update to a newer release, pull explicitly: `docker compose pull` then `docker compose up -d`.
+The compose file pins `pull_policy: missing`, so once the image is cached it never re-pulls on its
+own; that is deliberate (no surprise auto-updates), which is why moving to a new release is an
+explicit step.
+
 Your FIRST render downloads the LTX-Video weights (~10GB, once) into the models volume, so it takes
 several extra minutes; later renders skip the download.
 
