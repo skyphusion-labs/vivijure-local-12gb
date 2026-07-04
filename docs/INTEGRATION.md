@@ -64,18 +64,19 @@ to match the datacenter contract, and the datacenter door is poll-only too.
 
 ## The flip checklist (studio side)
 
-STATE (as of studio v0.7.7): `local-gpu` is currently **EXCLUDED** from the studio CI deploy (Strummer's
-PR #382 added it to `EXCLUDE` because its `wrangler.toml` binds Secrets-Store secrets that were not yet
-seeded -- an unsatisfiable binding aborted the v0.7.6 deploy), and there is **no** core
-`MODULE_LOCAL_GPU` binding yet. So the flip is a deliberate, ORDERED sequence. Order matters -- verify
-the live studio CI workflow before you run it, and only flip once the backend endpoint is reachable.
+STATUS (studio v0.14.0, 2026-07-04): the `local-gpu` module is **IN** the studio CI deploy loop, the
+core **binds `MODULE_LOCAL_GPU`**, and the door is **live** in the registry + the planner's
+motion.backend selector (proven end to end through a live pod render, studio PRs `vivijure#383`
+un-exclude + `#384` core binding). The sequence below is the **wiring recipe** -- how the door gets
+stood up, retained for a self-hoster bringing up their OWN studio, not pending work on this one. Order
+still matters: seed secrets before the deploy, and only flip once the backend endpoint is reachable.
 
 1. **Seed the module secrets FIRST** into the account Cloudflare Secrets Store. This must precede the
    deploy: `local-gpu`'s `wrangler.toml` binds them by `secret_name`, and `wrangler deploy` FAILS if the
-   store secret does not exist (that is exactly what broke v0.7.6). Same store + flow as the RunPod
-   modules (studio `docs/DEPLOYMENT.md` "Module secrets via the Secrets Store"). A persistent studio
-   binding needs a STABLE backend URL, so seed a named-tunnel hostname here; the default quick-tunnel
-   URL is ephemeral (it changes on restart):
+   store secret does not exist (that is exactly what broke studio v0.7.6). Same store + flow as the
+   RunPod modules (studio `docs/DEPLOYMENT.md` "Module secrets via the Secrets Store"). A persistent
+   studio binding needs a STABLE backend URL, so seed a named-tunnel hostname here; the default
+   quick-tunnel URL is ephemeral (it changes on restart):
 
    ```sh
    # the STABLE (named-tunnel) hostname terminating at the reachable backend (no trailing slash)
@@ -85,8 +86,10 @@ the live studio CI workflow before you run it, and only flip once the backend en
    wrangler secrets-store secret create <STORE_ID> --name LOCAL_BACKEND_TOKEN --value "<openssl rand -hex 32>"
    ```
 
-2. **Remove `local-gpu` from the studio CI `EXCLUDE`** (`.github/workflows/ci.yml`). With the secrets
-   seeded (step 1) its `wrangler deploy` now succeeds, so `vivijure-module-local-gpu` deploys.
+2. **Include the module in the studio CI deploy** (`.github/workflows/ci.yml` -- it must not sit in the
+   `EXCLUDE` list). With the secrets seeded (step 1) its `wrangler deploy` succeeds, so
+   `vivijure-module-local-gpu` deploys. (On skyphusion's own studio this meant removing the interim
+   EXCLUDE that PR #382 added while the v0.7.6 secrets were still unseeded.)
 
 3. **Bind it to the core.** Add a `[[services]]` binding to the core `wrangler.toml.example` so the
    registry discovers it (the registry scans env for `MODULE_*` service bindings). A `[[services]]`
@@ -107,8 +110,9 @@ the live studio CI workflow before you run it, and only flip once the backend en
 
 5. **Verify a live local-door render** end to end (the door appears in the selector and produces a clip).
 
-Once this sequence completes the local door appears in the planner's motion.backend selector (Joan's
-#379 selector renders it from the manifest's `ui.locality="local"` framing) and renders end to end.
+When this sequence completes the local door appears in the planner's motion.backend selector (Joan's
+#379 selector renders it from the manifest's `ui.locality="local"` framing) and renders end to end --
+which is exactly the state skyphusion's own studio has been in since v0.14.0.
 
 A homelabber wiring their OWN studio does the same wiring by hand, minus the CI steps: run the backend
 (`docs/HOMELABBER.md`), then paste the `ready` banner's Backend URL + token into the studio's
