@@ -102,6 +102,9 @@ Needs an NVIDIA GPU (12GB+), an NVIDIA driver 550 or newer (the runtime is CUDA 
 [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html),
 and about 25GB of free disk (a ~10GB container image + the ~10GB LTX weights).
 
+Starting from a bare Ubuntu box? **[docs/HOMELABBER.md](docs/HOMELABBER.md)** has copy-paste
+steps to install the driver, Docker, and the NVIDIA Container Toolkit before you run.
+
 ## Configuration (`.env`)
 
 Copy `.env.example` to `.env` and fill it in. Every setting is an environment variable:
