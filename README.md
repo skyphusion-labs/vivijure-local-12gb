@@ -80,6 +80,10 @@ docker compose up -d         # starts the server + its own tunnel (:8000 stays i
 docker compose logs ready    # the banner: your Backend URL + token, copy-paste ready
 ```
 
+`docker compose up` PULLS the prebuilt image from `ghcr.io/skyphusion-labs/vivijure-local-12gb:latest`
+(no local build; that is the whole ease-of-install point). Prefer to build from source? Run
+`docker compose up -d --build` instead and compose builds `deploy/Dockerfile` locally.
+
 Your FIRST render downloads the LTX-Video weights (~10GB, once) into the models volume, so it takes
 several extra minutes; later renders skip the download.
 
