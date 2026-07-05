@@ -240,6 +240,12 @@ the cap. The startup log prints the applied cap, e.g. `VRAM capped to 11.0GB (0.
   several extra minutes on the first render only. Later renders are fast.
 - **Studio can't reach it:** re-check the Backend URL + token from the banner
   (`docker compose logs ready`) match what you pasted into the studio.
+- **Renders fail with "could not fetch keyframe ... (404) ... Not Found":** you moved this door to a
+  studio on a different Cloudflare account or bucket, but its `.env` still points at the old bucket.
+  The door reads keyframes and writes clips against ITS OWN R2, not the studio's, so a 404 here means
+  it is looking in the wrong account. Update `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`,
+  `R2_SECRET_ACCESS_KEY`, and `R2_BUCKET` in `.env` to the new studio's R2, then recreate the
+  container. (If the door and studio share the same R2 account and bucket, this step is not needed.)
 
 ### What's next
 
