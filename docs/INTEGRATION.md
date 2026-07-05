@@ -62,38 +62,53 @@ If the studio wants a richer progress signal later (e.g. an R2 NDJSON event stre
 that is an additive, cross-repo change -- it is intentionally NOT built here, because the door's job is
 to match the datacenter contract, and the datacenter door is poll-only too.
 
-## The flip checklist (studio side)
+## Wiring this door into your studio
 
-STATUS (studio v0.14.0, 2026-07-04): the `local-gpu` module is **IN** the studio CI deploy loop, the
-core **binds `MODULE_LOCAL_GPU`**, and the door is **live** in the registry + the planner's
-motion.backend selector (proven end to end through a live pod render, studio PRs `vivijure#383`
-un-exclude + `#384` core binding). The sequence below is the **wiring recipe** -- how the door gets
-stood up, retained for a self-hoster bringing up their OWN studio, not pending work on this one. Order
-still matters: seed secrets before the deploy, and only flip once the backend endpoint is reachable.
+How you wire the door in depends on how the studio itself was deployed.
 
-1. **Seed the module secrets FIRST** into the account Cloudflare Secrets Store. This must precede the
-   deploy: `local-gpu`'s `wrangler.toml` binds them by `secret_name`, and `wrangler deploy` FAILS if the
-   store secret does not exist (that is exactly what broke studio v0.7.6). Same store + flow as the
-   RunPod modules (studio `docs/DEPLOYMENT.md` "Module secrets via the Secrets Store"). A persistent
-   studio binding needs a STABLE backend URL, so seed a named-tunnel hostname here; the default
-   quick-tunnel URL is ephemeral (it changes on restart):
+### If you deploy the studio with `deploy.sh` (the standard path)
+
+Wiring the local-GPU door is one opt-in flag, not a manual checklist:
+
+1. Bring this door up first (`docs/HOMELABBER.md`) and copy its **Backend URL** and **token** from the
+   `ready` banner. For a binding that survives door restarts, use a named-tunnel (stable) URL; the
+   default quick-tunnel URL changes on every restart.
+2. In the studio's `deploy.env`, set:
 
    ```sh
-   # the STABLE (named-tunnel) hostname terminating at the reachable backend (no trailing slash)
-   wrangler secrets-store secret create <STORE_ID> --name LOCAL_BACKEND_URL   --value "https://render.example"
-   # the shared token the backend enforces (match the backend's .env LOCAL_BACKEND_TOKEN, or the
-   # container-generated one from the `ready` banner)
-   wrangler secrets-store secret create <STORE_ID> --name LOCAL_BACKEND_TOKEN --value "<openssl rand -hex 32>"
+   INSTALL_LOCAL_GPU=1
+   LOCAL_BACKEND_URL=https://your-door-tunnel-host   # no trailing slash
+   LOCAL_BACKEND_TOKEN=the-token-from-the-banner
    ```
 
-2. **Include the module in the studio CI deploy** (`.github/workflows/ci.yml` -- it must not sit in the
-   `EXCLUDE` list). With the secrets seeded (step 1) its `wrangler deploy` succeeds, so
-   `vivijure-module-local-gpu` deploys. (On skyphusion's own studio this meant removing the interim
-   EXCLUDE that PR #382 added while the v0.7.6 secrets were still unseeded.)
+3. Run `./deploy.sh`.
 
-3. **Bind it to the core.** Add a `[[services]]` binding to the core `wrangler.toml.example` so the
-   registry discovers it (the registry scans env for `MODULE_*` service bindings). A `[[services]]`
-   binding must point at a DEPLOYED module (else the core deploy dangles), so do this AFTER step 2:
+`deploy.sh` seeds both secrets into your account's Cloudflare Secrets Store, deploys the `local-gpu`
+module worker, keeps its `MODULE_LOCAL_GPU` `[[services]]` binding in the core, and redeploys the core.
+There is no CI to edit and no `wrangler` command to run by hand. The studio's `docs/DEPLOYMENT.md`
+"local-GPU door" section is the authoritative reference.
+
+Then verify: open the planner, pick this door in the `motion.backend` selector, and run one render end
+to end.
+
+### If you wire a studio by hand (no `deploy.sh`)
+
+Same end state as `INSTALL_LOCAL_GPU=1`, done manually. Order matters: a `[[services]]` binding must
+point at a module that is already DEPLOYED, and `local-gpu`'s `wrangler deploy` fails if its
+Secrets-Store secrets are missing.
+
+1. **Seed the two secrets first** into the account Cloudflare Secrets Store:
+
+   ```sh
+   wrangler secrets-store secret create <STORE_ID> --name LOCAL_BACKEND_URL   --value "https://your-door-tunnel-host"
+   wrangler secrets-store secret create <STORE_ID> --name LOCAL_BACKEND_TOKEN --value "the token from the banner"
+   ```
+
+2. **Deploy the module worker.** In the studio's `modules/local-gpu/wrangler.toml`, replace the
+   store-id placeholder with your Secrets-Store id, then `wrangler deploy` it; it comes up as
+   `vivijure-module-local-gpu`.
+3. **Bind it to the core.** Add the `[[services]]` binding to the core config so the registry discovers
+   it (the registry scans env for `MODULE_*` bindings):
 
    ```toml
    # Local consumer GPU (LTX-Video on a 12GB card). The local door.
@@ -102,21 +117,12 @@ still matters: seed secrets before the deploy, and only flip once the backend en
    service = "vivijure-module-local-gpu"
    ```
 
-4. **The backend must already be running + reachable** at `LOCAL_BACKEND_URL` (this repo, on any
-   machine with the GPU -- homelab box or cloud pod -- via a cloudflared tunnel) BEFORE steps 1-3 make
-   the door user-visible -- a picked door pointing at nothing fails every render. For a persistent
-   binding use a STABLE (named-tunnel) URL; the default quick-tunnel URL is ephemeral. See the
-   `docs/HOMELABBER.md` quickstart + `docker-compose.yml`.
+4. **Redeploy the core.**
 
-5. **Verify a live local-door render** end to end (the door appears in the selector and produces a clip).
-
-When this sequence completes the local door appears in the planner's motion.backend selector (Joan's
-#379 selector renders it from the manifest's `ui.locality="local"` framing) and renders end to end --
-which is exactly the state skyphusion's own studio has been in since v0.14.0.
-
-A homelabber wiring their OWN studio does the same wiring by hand, minus the CI steps: run the backend
-(`docs/HOMELABBER.md`), then paste the `ready` banner's Backend URL + token into the studio's
-"Local (your GPU)" door. The named-tunnel upgrade is what turns that into a set-once address.
+Either way, the backend must be running and reachable at `LOCAL_BACKEND_URL` before the door becomes
+user-visible; a picked door pointing at nothing fails every render. When it is wired the door appears
+in the planner's `motion.backend` selector (rendered from the manifest's `ui.locality="local"`) and
+renders end to end.
 
 ## Trust boundary (do not break)
 
