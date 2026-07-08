@@ -2,8 +2,10 @@
 #
 # torch/torchvision install from the CUDA index matched to the card's driver line, PINNED to the set
 # validated on real silicon in the S8 re-pin proof (torch 2.5.1 + torchvision 0.20.1 from cu124, paired with
-# diffusers 0.38.0 / transformers 4.57.6 in requirements.txt; see SECURITY.md). Built to run on the user's own box (a
-# 4060 Ti is Ada / CUDA 12.x), NOT on RunPod. Run it via docker-compose.yml or `docker run --gpus all`.
+# diffusers 0.38.0 / transformers 4.57.6 in requirements.txt; see SECURITY.md). Portable to any CUDA 12.x card: the pinned cu124 / torch 2.5.1 stack covers
+# Ada / Ampere / Hopper (sm_80/86/89/90), so it runs on a homelab consumer box (e.g. a 4060 Ti) OR a
+# datacenter secure-cloud pod (the prod local-door flip runs this exact image on a RunPod SECURE pod).
+# Run it via docker-compose.yml or `docker run --gpus all`.
 FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive \

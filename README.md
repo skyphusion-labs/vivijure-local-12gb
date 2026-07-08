@@ -84,6 +84,11 @@ docker compose logs ready    # the banner: your Backend URL + token, copy-paste 
 (no local build; that is the whole ease-of-install point). Prefer to build from source? Run
 `docker compose up -d --build` instead and compose builds `deploy/Dockerfile` locally.
 
+To update to a newer release, pull explicitly: `docker compose pull` then `docker compose up -d`.
+The compose file pins `pull_policy: missing`, so once the image is cached it never re-pulls on its
+own; that is deliberate (no surprise auto-updates), which is why moving to a new release is an
+explicit step.
+
 Your FIRST render downloads the LTX-Video weights (~10GB, once) into the models volume, so it takes
 several extra minutes; later renders skip the download.
 
@@ -97,6 +102,9 @@ Needs an NVIDIA GPU (12GB+), an NVIDIA driver 550 or newer (the runtime is CUDA 
 [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html),
 and about 25GB of free disk (a ~10GB container image + the ~10GB LTX weights).
 
+Starting from a bare Ubuntu box? **[docs/HOMELABBER.md](docs/HOMELABBER.md)** has copy-paste
+steps to install the driver, Docker, and the NVIDIA Container Toolkit before you run.
+
 ## Configuration (`.env`)
 
 Copy `.env.example` to `.env` and fill it in. Every setting is an environment variable:
@@ -106,7 +114,7 @@ Copy `.env.example` to `.env` and fill it in. Every setting is an environment va
 | `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` | yes | -- | The one credential: the shared-R2 key (read the keyframe, write the clip). Scope it to the bucket. |
 | `R2_BUCKET` | no | `vivijure` | The shared bucket name. |
 | `LOCAL_BACKEND_TOKEN` | no | auto-generated | The bearer token every i2v request must carry (the tunnel is public). Blank => a strong one is generated and printed in the banner; set it for a stable token across restarts. |
-| `TUNNEL_TOKEN` | no | quick tunnel | A Cloudflare named-tunnel token for a STABLE hostname. Blank => a zero-config TryCloudflare quick tunnel (URL changes each restart). |
+| `TUNNEL_TOKEN` | no | quick tunnel | A Cloudflare named-tunnel token for a STABLE hostname (also needs the `docker-compose.override.yml` from HOMELABBER "A stable address"). Blank => a zero-config TryCloudflare quick tunnel (URL changes each restart). |
 | `VIVIJURE_MAX_VRAM_GB` | no | full card | Cap the VRAM vivijure claims, in GB, when you share the card with other workloads. The backend pins torch to that fraction of the card at startup. Blank (or a value >= your card's size) => use the whole card. |
 
 The full reference -- every `.env` value, every built-in setting, the ports, the volumes, and the

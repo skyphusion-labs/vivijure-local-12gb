@@ -1,18 +1,22 @@
 # Wiring the local door into the studio
 
 How the `vivijure-local-12gb` (this repo) plugs into the Vivijure studio through the `local-gpu`
-motion.backend module. The control plane is UNCHANGED in code; wiring is binding + secrets + the
-homelabber's running backend. The benchmark has proven out (docs/proof/RESULTS.md); wire it and flip it on.
+motion.backend module. The control plane is UNCHANGED in code; wiring is binding + secrets + a
+reachable backend. That backend runs on **any machine with a 12GB+ GPU and a cloudflared tunnel** --
+a homelab box (the primary audience) or a disposable cloud pod (how the June plumbing proof itself
+ran: a 16GB pod through a public TryCloudflare quick tunnel, `docs/RUN-LOG.md`). The homelab is the
+audience example, not the architecture. The benchmark has proven out (`docs/proof/RESULTS.md`); wire
+it and flip it on.
 
 ## The picture
 
 ```
 studio control plane --(service binding MODULE_LOCAL_GPU)--> local-gpu module worker
-   local-gpu --(POST /run i2v_clip, GET /status, POST /cancel)--> Cloudflare tunnel --> THIS backend (your 12GB+ GPU)
+   local-gpu --(POST /run i2v_clip, GET /status, POST /cancel)--> Cloudflare tunnel --> THIS backend (any machine with a 12GB+ GPU)
 ```
 
 The `local-gpu` module (in the `vivijure` repo, `modules/local-gpu/`) is the bridge. It holds the
-backend URL + optional token and speaks the same `i2v_clip` wire body as the datacenter door. This
+backend URL + the shared token and speaks the same `i2v_clip` wire body as the datacenter door. This
 backend shares the studio's R2 bucket, so it reads the keyframe by key and writes the clip by key --
 the module moves no bytes.
 
@@ -27,8 +31,11 @@ the module moves no bytes.
 | `POST /run { "selftest": true }` -> `{ ok:true, selftest:true }` | no-GPU transport probe |
 
 `config` carries `{ quality (draft\|standard\|final), num_frames, fps, seed?, flow_shift?, negative_prompt? }`.
-Auth: if `LOCAL_BACKEND_TOKEN` is set, the module sends it as `Authorization: Bearer <token>` and the
-server enforces it; unset = open (trusted-LAN tunnel only).
+Auth: the i2v routes **require** the token. The tunnel is public, so the backend refuses to serve i2v
+open -- it returns **503** when `LOCAL_BACKEND_TOKEN` is unset (refuse to run open) and **401** when the
+`Authorization: Bearer <token>` header is missing or wrong. The container **auto-generates** a strong
+token when you leave it blank (the `ready` banner prints it); `/health` and the no-GPU selftest stay
+open for liveness. The module sends the token as `Authorization: Bearer <token>`.
 
 ## Progress and status semantics (poll-only)
 
@@ -55,53 +62,74 @@ If the studio wants a richer progress signal later (e.g. an R2 NDJSON event stre
 that is an additive, cross-repo change -- it is intentionally NOT built here, because the door's job is
 to match the datacenter contract, and the datacenter door is poll-only too.
 
-## The flip checklist (studio side)
+## Wiring this door into your studio
 
-STATE (as of studio v0.7.7): `local-gpu` is currently **EXCLUDED** from the studio CI deploy (Strummer's
-PR #382 added it to `EXCLUDE` because its `wrangler.toml` binds Secrets-Store secrets that were not yet
-seeded -- an unsatisfiable binding aborted the v0.7.6 deploy), and there is **no** core
-`MODULE_LOCAL_GPU` binding yet. So the flip is a deliberate, ORDERED sequence. Order matters -- verify
-the live studio CI workflow before you run it, and only flip once the backend endpoint is reachable.
+How you wire the door in depends on how the studio itself was deployed.
 
-1. **Seed the module secrets FIRST** into the account Cloudflare Secrets Store. This must precede the
-   deploy: `local-gpu`'s `wrangler.toml` binds them by `secret_name`, and `wrangler deploy` FAILS if the
-   store secret does not exist (that is exactly what broke v0.7.6). Same store + flow as the RunPod
-   modules (studio `docs/DEPLOYMENT.md` "Module secrets via the Secrets Store"):
+### If you deploy the studio with `deploy.sh` (the standard path)
+
+Wiring the local-GPU door is one opt-in flag, not a manual checklist:
+
+1. Bring this door up first (`docs/HOMELABBER.md`) and copy its **Backend URL** and **token** from the
+   `ready` banner. For a binding that survives door restarts, use a named-tunnel (stable) URL; the
+   default quick-tunnel URL changes on every restart.
+2. In the studio's `deploy.env`, set:
 
    ```sh
-   # the tunnel hostname terminating at the reachable backend (no trailing slash)
-   wrangler secrets-store secret create <STORE_ID> --name LOCAL_BACKEND_URL   --value "https://render.example"
-   # the shared secret the backend checks (optional; match the backend's .env LOCAL_BACKEND_TOKEN)
-   wrangler secrets-store secret create <STORE_ID> --name LOCAL_BACKEND_TOKEN --value "<openssl rand -hex 32>"
+   INSTALL_LOCAL_GPU=1
+   LOCAL_BACKEND_URL=https://your-door-tunnel-host   # no trailing slash
+   LOCAL_BACKEND_TOKEN=the-token-from-the-banner
    ```
 
-2. **Remove `local-gpu` from the studio CI `EXCLUDE`** (`.github/workflows/ci.yml`). With the secrets
-   seeded (step 1) its `wrangler deploy` now succeeds, so `vivijure-module-local-gpu` deploys.
+3. Run `./deploy.sh`.
 
-3. **Bind it to the core.** Add a `[[services]]` binding to the core `wrangler.toml.example` so the
-   registry discovers it (the registry scans env for `MODULE_*` service bindings). A `[[services]]`
-   binding must point at a DEPLOYED module (else the core deploy dangles), so do this AFTER step 2:
+`deploy.sh` seeds both secrets into your account's Cloudflare Secrets Store, deploys the `local-gpu`
+module worker, keeps its `MODULE_LOCAL_GPU` `[[services]]` binding in the core, and redeploys the core.
+There is no CI to edit and no `wrangler` command to run by hand. The studio's `docs/DEPLOYMENT.md`
+"local-GPU door" section is the authoritative reference.
+
+Then verify: open the planner, pick this door in the `motion.backend` selector, and run one render end
+to end.
+
+### If you wire a studio by hand (no `deploy.sh`)
+
+Same end state as `INSTALL_LOCAL_GPU=1`, done manually. Order matters: a `[[services]]` binding must
+point at a module that is already DEPLOYED, and `local-gpu`'s `wrangler deploy` fails if its
+Secrets-Store secrets are missing.
+
+1. **Seed the two secrets first** into the account Cloudflare Secrets Store:
+
+   ```sh
+   wrangler secrets-store secret create <STORE_ID> --name LOCAL_BACKEND_URL   --value "https://your-door-tunnel-host"
+   wrangler secrets-store secret create <STORE_ID> --name LOCAL_BACKEND_TOKEN --value "the token from the banner"
+   ```
+
+2. **Deploy the module worker.** In the studio's `modules/local-gpu/wrangler.toml`, replace the
+   store-id placeholder with your Secrets-Store id, then `wrangler deploy` it; it comes up as
+   `vivijure-module-local-gpu`.
+3. **Bind it to the core.** Add the `[[services]]` binding to the core config so the registry discovers
+   it (the registry scans env for `MODULE_*` bindings):
 
    ```toml
-   # Local consumer GPU (LTX-Video on the homelabber's own 12GB card). The local door.
+   # Local consumer GPU (LTX-Video on a 12GB card). The local door.
    [[services]]
    binding = "MODULE_LOCAL_GPU"
    service = "vivijure-module-local-gpu"
    ```
 
-4. **The backend must already be running + reachable** at `LOCAL_BACKEND_URL` (this repo, via a
-   Cloudflare tunnel) BEFORE steps 1-3 make the door user-visible -- a picked door pointing at nothing
-   fails every render. See the repo README run-story + `docker-compose.yml`.
+4. **Redeploy the core.**
 
-5. **Verify a live local-door render** end to end (the door appears in the selector and produces a clip).
-
-Once this sequence completes the local door appears in the planner's motion.backend selector (Joan's
-#379 selector renders it from the manifest's `ui.locality="local"` framing) and renders end to end.
+Either way, the backend must be running and reachable at `LOCAL_BACKEND_URL` before the door becomes
+user-visible; a picked door pointing at nothing fails every render. When it is wired the door appears
+in the planner's `motion.backend` selector (rendered from the manifest's `ui.locality="local"`) and
+renders end to end.
 
 ## Trust boundary (do not break)
 
 The `local-gpu` module has NO public surface (`workers_dev=false`, no route): the studio service
-binding IS its auth. The backend itself sits behind a Cloudflare tunnel; keep its published port on
-`127.0.0.1` (the compose default) so it is reachable only through the tunnel, and set
-`LOCAL_BACKEND_TOKEN` for defense in depth. A public render endpoint is an unauthenticated GPU-spend /
-DoS trigger against the homelab box.
+binding IS its auth. The backend itself sits behind a Cloudflare tunnel and **requires**
+`LOCAL_BACKEND_TOKEN` on every i2v request -- it refuses to serve open (503 unset / 401 wrong; see Auth
+above), and the container auto-generates a token if you do not set one. Its port is only `expose`d on
+the compose network (never published to the host), so it is reachable only through the tunnel. A
+public, untokened render endpoint would be an unauthenticated GPU-spend / DoS trigger against whatever
+box runs the backend.
