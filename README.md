@@ -195,6 +195,12 @@ One credential: the shared-R2 key (read the keyframe, write the clip). Input is 
 `LOCAL_BACKEND_TOKEN` is defense in depth on the tunnel origin. The backend holds no studio secrets and
 no submitter identity.
 
+## Who this is for
+
+Homelab builders with a **12GB consumer GPU** (e.g. RTX 3060 12GB, RTX 4070) who want Vivijure image-to-video locally without RunPod rent.
+
+**Vivijure Studio:** https://vivijure.com · **Welcome demo:** https://vivijure.skyphusion.org/welcome · **Skyphusion Labs:** https://skyphusion.org
+
 ## Support
 
 Questions, bugs, or ideas? Start with this repo's [GitHub Issues](../../issues); see
