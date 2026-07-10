@@ -74,6 +74,11 @@ The full map, the same one every constellation repo shows, and how to read it, i
 
 ## Run it on your own box (one command)
 
+New box with nothing installed yet? Follow the from-scratch prerequisites (NVIDIA driver, Docker, the
+NVIDIA Container Toolkit; one tested path, Ubuntu 24.04 LTS) in
+**[docs/HOMELABBER.md](docs/HOMELABBER.md)**, then run `./preflight.sh` to confirm your box is ready
+(it checks everything and installs nothing). Then:
+
 ```sh
 cp .env.example .env         # then edit: your R2 creds (+ optional LOCAL_BACKEND_TOKEN)
 docker compose up -d         # starts the server + its own tunnel (:8000 stays inside the compose network)
