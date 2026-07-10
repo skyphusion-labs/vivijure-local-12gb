@@ -14,7 +14,9 @@ render engine is unchanged.
   `--gpus all` container can ACTUALLY see the GPU (the real NVIDIA Container Toolkit test, not just
   "package installed"), and free disk. Each failed check names the exact HOMELABBER.md step that fixes
   it and the script exits non-zero; it installs nothing (Conrad ruling: we do not auto-install across
-  every package manager). Door-portable via `DRIVER_FLOOR` / `VRAM_FLOOR_MIB` / `DISK_FLOOR_GB` env.
+  every package manager). Door-portable via `DRIVER_FLOOR` / `VRAM_FLOOR_MIB` / `DISK_FLOOR_GB` plus a `WARN_ON_VGPU` seam
+  (default off here: LTX renders correctly on a vGPU slice; the 16GB CogVideoX door ships it on),
+  mirroring the runtime `core/gpu_virt.py` per-door guard.
 - **HOMELABBER.md is now one tested Ubuntu 24.04 LTS path (#70).** Added an "already have `nvidia-smi`
   working? skip ahead" branch, a "Confirm your box is ready (preflight)" section, retired the stale
   "we have not run a from-scratch driver install ourselves" caveat (the driver + Docker + Container

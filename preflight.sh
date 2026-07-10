@@ -11,12 +11,17 @@
 # Why it never installs anything (vivijure-local-12gb#70): auto-installing across every Linux package
 # manager is a rabbit hole we don't maintain. Instead this diagnoses and points you at the ONE tested
 # install path -- docs/HOMELABBER.md, "Install the prerequisites", Ubuntu 24.04 LTS.
+#
+# Door seam: this is the SAME script the sibling doors ship; per-door behavior is a few env floors
+# (VRAM_FLOOR_MIB) plus WARN_ON_VGPU. The LTX 12GB door renders correctly on a vGPU slice, so it ships
+# WARN_ON_VGPU=0 (silent); the 16GB CogVideoX door ships WARN_ON_VGPU=1 (it corrupts on a slice).
 set -u
 
-# ---- door floors (the 16GB sibling ships the same script with a higher VRAM floor) -----------------
+# ---- door floors / seams (a sibling door ships the same script with different defaults) -------------
 DRIVER_FLOOR="${DRIVER_FLOOR:-550}"          # NVIDIA driver MAJOR version floor
 VRAM_FLOOR_MIB="${VRAM_FLOOR_MIB:-12000}"    # this door needs a ~12GB card
 DISK_FLOOR_GB="${DISK_FLOOR_GB:-25}"         # container image + LTX weights (first render)
+WARN_ON_VGPU="${WARN_ON_VGPU:-0}"            # 0: this door tolerates a vGPU slice (LTX). 1: warn (CogVideoX).
 GPU_TEST_IMAGE="${GPU_TEST_IMAGE:-nvidia/cuda:12.4.1-base-ubuntu22.04}"
 DOC="docs/HOMELABBER.md"
 
@@ -74,12 +79,25 @@ if [ "$have_driver" = "1" ]; then
     grn "GPU VRAM: ${vram} MiB (>= ${VRAM_FLOOR_MIB} MiB floor)"
   elif [ -n "$vram" ]; then
     red "GPU VRAM: ${vram} MiB is below the ${VRAM_FLOOR_MIB} MiB this door needs."
-    fix "this backend targets a ~12GB+ card; see the 'Quality tiers' table in $DOC. A smaller card cannot fit even the draft tier."
+    fix "this backend targets a card at or above the floor; see the 'Quality tiers' table in $DOC. A smaller card cannot fit even the draft tier."
   else
     warnln "GPU VRAM: could not read memory.total from nvidia-smi (skipping the size check)."
   fi
 else
   skipln "GPU VRAM: skipped (no working driver yet -- fix the driver check first)."
+fi
+
+# 2b. vGPU-slice warning (door-gated). A mediated GRID/vGPU SLICE can render corrupt (pure-noise) clips
+# on some door engines while REPORTING success; a whole-card passthrough is fine. WARN, never fail --
+# the operator may know better, and only a "vgpu" mode is flagged (passthrough / none / unknown stay
+# silent). Mirrors the backend's own startup guard (core/gpu_virt.py).
+if [ "$WARN_ON_VGPU" = "1" ] && [ "$have_driver" = "1" ]; then
+  vmode="$(nvidia-smi -q 2>/dev/null | awk -F: '/^[[:space:]]*Virtualization Mode/{gsub(/^[ \t]+|[ \t]+$/,"",$2); print tolower($2); exit}')"
+  if [ "$vmode" = "vgpu" ]; then
+    warnln "GPU is a GRID/vGPU SLICE (Virtualization Mode: vgpu). This door's engine is KNOWN to render"
+    printf "        corrupted (pure-noise) clips on a vGPU slice while REPORTING success. Use a physical /\n"
+    printf "        whole-card passthrough GPU. See the vGPU note in %s. (Warning only; not a hard failure.)\n" "$DOC"
+  fi
 fi
 
 # 3. Docker present + daemon up
