@@ -5,4 +5,4 @@ video on a single consumer GPU (a 12GB floor, proven) and speaks the SAME i2v_cl
 the studio's local-gpu module plugs it into the unchanged control plane. See docs/architecture.md.
 """
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
