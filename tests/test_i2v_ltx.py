@@ -169,3 +169,159 @@ def test_evict_pipe_skips_empty_cache_when_no_cuda():
 
     i2v_ltx._evict_pipe(cfg, torch)            # CPU box: no CUDA to empty
     assert emptied == []
+
+
+# --------------------------------------------------------------------------- engine dispatch (#1)
+
+def _fake_diffusers(monkeypatch, *, cond_pipe=None, upsampler=None):
+    """Inject a fake `diffusers` module so the deferred engine imports resolve on a CPU box (no torch).
+    Exposes LTXConditionPipeline / LTXVideoCondition (+ LTXLatentUpsamplePipeline when given)."""
+    import sys
+    import types
+
+    class _FakeCond:
+        def __init__(self, image=None, frame_index=0, video=None, strength=1.0):
+            self.image, self.frame_index = image, frame_index
+
+    class _CondPipeCls:
+        @staticmethod
+        def from_pretrained(model, torch_dtype=None, **kw):
+            return cond_pipe
+
+    fake = types.ModuleType("diffusers")
+    fake.LTXVideoCondition = _FakeCond
+    fake.LTXConditionPipeline = _CondPipeCls
+    if upsampler is not None:
+        class _UpCls:
+            @staticmethod
+            def from_pretrained(model, vae=None, torch_dtype=None, **kw):
+                upsampler.model, upsampler.vae = model, vae
+                return upsampler
+        fake.LTXLatentUpsamplePipeline = _UpCls
+    monkeypatch.setitem(sys.modules, "diffusers", fake)
+    return fake
+
+
+class _RecordingPipe:
+    """A callable stand-in pipeline: records each call's kwargs and returns an object whose `.frames`
+    is a per-call sentinel list (so `.frames` as latents and `.frames[0]` as a clip both work)."""
+
+    def __init__(self):
+        self.calls = []
+
+    def __call__(self, **kwargs):
+        self.calls.append(kwargs)
+        idx = len(self.calls) - 1
+
+        class _R:
+            frames = [f"frames-{idx}"]
+
+        return _R()
+
+
+def test_is_distilled_true_for_distilled_tiers_only():
+    draft = I2VConfig.from_request({}, tier=QualityTier.DRAFT)
+    std = I2VConfig.from_request({}, tier=QualityTier.STANDARD)
+    final = I2VConfig.from_request({}, tier=QualityTier.FINAL)
+    assert i2v_ltx.is_distilled(final) is True        # only final is a distilled variant (13B-distilled)
+    assert i2v_ltx.is_distilled(draft) is False       # draft + standard are the base 2B i2v
+    assert i2v_ltx.is_distilled(std) is False
+
+
+def test_build_conditions_wraps_keyframe_as_a_frame0_condition(monkeypatch):
+    _fake_diffusers(monkeypatch)
+    conds = i2v_ltx._build_conditions("KEYFRAME")
+    assert len(conds) == 1
+    assert conds[0].image == "KEYFRAME"
+    assert conds[0].frame_index == 0                 # the keyframe conditions frame 0, not `image=`
+
+
+def test_run_base_drives_the_image_pipeline_with_image_kwarg():
+    i2v_ltx._PIPE_CACHE.clear()
+    cfg = I2VConfig.from_request({}, tier=QualityTier.STANDARD)   # BASE_I2V
+    pipe = _RecordingPipe()
+
+    class _Cls:
+        @staticmethod
+        def from_pretrained(model, torch_dtype=None):
+            return pipe
+
+    torch = _fake_torch(cuda_available=False)
+    frames = i2v_ltx._run_base(cfg, "IMG", "a dolly in", 704, 512, 121, "GEN", None, torch, _Cls)
+    assert frames == "frames-0"
+    call = pipe.calls[0]
+    assert call["image"] == "IMG" and "conditions" not in call   # base path uses image=, not conditions
+    assert call["width"] == 704 and call["height"] == 512 and call["num_frames"] == 121
+    i2v_ltx._PIPE_CACHE.clear()
+
+
+def test_run_condition_drives_the_condition_pipeline_with_conditions_not_image(monkeypatch):
+    i2v_ltx._PIPE_CACHE.clear()
+    cfg = I2VConfig.from_request({}, tier=QualityTier.FINAL)      # CONDITION (13B), upsampler None
+    pipe = _RecordingPipe()
+    _fake_diffusers(monkeypatch, cond_pipe=pipe)
+    torch = _fake_torch(cuda_available=False)
+
+    frames = i2v_ltx._run_condition(cfg, "IMG", "a dolly in", 768, 512, 121, "GEN", None, torch)
+    assert frames == "frames-0"
+    call = pipe.calls[0]
+    assert "conditions" in call and "image" not in call          # condition path, not image=
+    assert call["conditions"][0].image == "IMG"                  # keyframe wrapped as the condition
+    assert call["width"] == 768 and call["height"] == 512 and call["num_frames"] == 121
+    i2v_ltx._PIPE_CACHE.clear()
+
+
+def test_run_condition_upsampled_runs_generate_low_then_upscale(monkeypatch):
+    import dataclasses
+
+    i2v_ltx._PIPE_CACHE.clear()
+    i2v_ltx._UPSAMPLER_CACHE.clear()
+    base = I2VConfig.from_request({}, tier=QualityTier.FINAL)     # CONDITION
+    cfg = dataclasses.replace(base, upsampler="Lightricks/ltxv-spatial-upscaler-0.9.7")
+    pipe = _RecordingPipe()
+    up = _RecordingPipe()
+    _fake_diffusers(monkeypatch, cond_pipe=pipe, upsampler=up)
+    torch = _fake_torch(cuda_available=False)
+
+    frames = i2v_ltx._run_condition(cfg, "IMG", "a dolly in", 768, 512, 121, "GEN", None, torch)
+
+    # Stage 1: low-res latent generate (output_type latent, downscaled dims).
+    assert pipe.calls[0]["output_type"] == "latent"
+    assert pipe.calls[0]["width"] < 768 and pipe.calls[0]["height"] < 512
+    low_w, low_h = pipe.calls[0]["width"], pipe.calls[0]["height"]
+    # Stage 2: the upsampler takes the stage-1 latents.
+    assert up.calls[0]["latents"] == ["frames-0"] and up.calls[0]["output_type"] == "latent"
+    # Stage 3: refine + decode at 2x the downscaled resolution, feeding the upscaled latents.
+    assert pipe.calls[1]["output_type"] == "pil"
+    assert "latents" in pipe.calls[1] and "denoise_strength" in pipe.calls[1]
+    assert pipe.calls[1]["width"] == i2v_ltx.snap_dim(low_w * 2)
+    assert pipe.calls[1]["height"] == i2v_ltx.snap_dim(low_h * 2)
+    assert frames == "frames-1"                                   # the decoded clip is the refine pass output
+    i2v_ltx._PIPE_CACHE.clear()
+    i2v_ltx._UPSAMPLER_CACHE.clear()
+
+
+def test_pipe_cache_key_separates_engine_class():
+    import dataclasses
+
+    from vivijure_local.config import Engine
+
+    cfg = I2VConfig.from_request({}, tier=QualityTier.STANDARD)   # BASE_I2V
+    cond = dataclasses.replace(cfg, engine=Engine.CONDITION)
+    # Same model + offload but a different engine class must not share a cached pipe.
+    assert i2v_ltx._pipe_cache_key(cfg) != i2v_ltx._pipe_cache_key(cond)
+
+
+def test_evict_pipe_also_drops_the_upsampler_entry():
+    import dataclasses
+
+    i2v_ltx._PIPE_CACHE.clear()
+    i2v_ltx._UPSAMPLER_CACHE.clear()
+    base = I2VConfig.from_request({}, tier=QualityTier.FINAL)
+    cfg = dataclasses.replace(base, upsampler="Lightricks/ltxv-spatial-upscaler-0.9.7")
+    i2v_ltx._PIPE_CACHE[i2v_ltx._pipe_cache_key(cfg)] = object()
+    i2v_ltx._UPSAMPLER_CACHE[(cfg.upsampler, cfg.offload.value)] = object()
+    torch = _fake_torch(cuda_available=False)
+
+    i2v_ltx._evict_pipe(cfg, torch)
+    assert not i2v_ltx._PIPE_CACHE and not i2v_ltx._UPSAMPLER_CACHE   # both cleared on a poisoned render

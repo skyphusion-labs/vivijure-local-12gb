@@ -12,10 +12,12 @@ injected value not in the module's enum, so the local-gpu module's enum stays dr
 (see vivijure/tests/quality-tier-drift.test.ts, #124). The HONESTY is in the engine mapping below and
 in `docs/i2v-model-selection.md`, not in renaming the tiers.
 
-These numbers are SCAFFOLD DEFAULTS. The resolution / frame / step ceilings that genuinely fit 12GB
-can only be finalized by a live benchmark on real silicon (docs/live-benchmark-plan.md); until then
-they are conservative and tunable via env. Nothing here trains or generates; this module is pure +
-CPU-importable (no torch), exactly like vivijure-backend's config.py.
+The tier->engine dispatch (#1): each tier declares WHICH diffusers pipeline it drives (`engine`) and
+which LTX weights (`model`). `draft` + `standard` stay the PROVEN base 2B i2v (LTXImageToVideoPipeline,
+the safe default validated in docs/proof/RESULTS.md); `final` drives the 13B-distilled variant through
+LTXConditionPipeline (an LTXVideoCondition input, NOT `image=`), the quality ceiling PROVEN to fit a
+hard 12GB allocator cap via sequential offload (docs/proof/BENCH-13B.md). Nothing here trains or
+generates; this module is pure + CPU-importable (no torch), exactly like vivijure-backend's config.py.
 """
 from __future__ import annotations
 
@@ -46,17 +48,34 @@ class Offload(str, Enum):
 
     NONE = "none"                      # everything resident on the GPU (fastest; only the lightest config)
     MODEL_CPU_OFFLOAD = "model"        # whole submodules paged to CPU between uses (diffusers enable_model_cpu_offload)
-    SEQUENTIAL_CPU_OFFLOAD = "sequential"  # per-layer paging (slowest, smallest footprint; the 12GB fallback)
+    SEQUENTIAL_CPU_OFFLOAD = "sequential"  # per-layer paging (slowest, smallest footprint; the 13B / 12GB fit)
 
 
-# LTX model variants we target on a 12GB card. The 2B-distilled is the lightest real i2v and the
-# default; the 13B-fp8-distilled is the quality ceiling that still fits Ada 16GB (fp8 is an Ada
-# feature -- the 4060 Ti is Ada). See docs/i2v-model-selection.md for the comparison that chose LTX.
-# Benchmark-VALIDATED under an 11GB VRAM cap, the honest 12GB budget (docs/proof/RESULTS.md): the
-# base LTX i2v via LTXImageToVideoPipeline peaks at ~9.78GB reserved with model-cpu-offload + VAE tiling.
-# This is the proven path. The few-step distilled + 13B variants load via a DIFFERENT pipeline class
-# (LTXConditionPipeline + the spatial upscaler) and are a quality FOLLOW-UP, not wired yet.
-LTX_BASE = "Lightricks/LTX-Video"
+class Engine(str, Enum):
+    """Which diffusers pipeline class a tier drives. The dispatch in `i2v_ltx.animate` reads this.
+
+    BASE_I2V is the PROVEN path: `LTXImageToVideoPipeline` with an `image=` keyframe (validated across
+    all three tiers under an 11GB cap, docs/proof/RESULTS.md) -- the safe default. CONDITION is
+    `LTXConditionPipeline`, which the 13B-distilled variant requires: the keyframe is passed as an
+    `LTXVideoCondition` (frame 0), NOT `image=`. Keeping this as a tier field means a tier that does not
+    fit under the 12GB cap can fall back to BASE_I2V without touching the engine."""
+
+    BASE_I2V = "base_i2v"    # LTXImageToVideoPipeline (image=), the proven default
+    CONDITION = "condition"  # LTXConditionPipeline (LTXVideoCondition), the 13B-distilled path
+
+
+# LTX model variants. The base is the 2B i2v, PROVEN across all tiers (docs/proof/RESULTS.md). The 13B
+# distilled variant is the `final` quality ceiling and loads through the CONDITION pipeline. See
+# docs/i2v-model-selection.md for the comparison and docs/proof/BENCH-13B.md for the measured 12GB fit.
+#
+# NOTE (measured, #1): `Lightricks/LTX-Video-0.9.7-distilled` is itself a 13B-class model (48 layers,
+# 4096 inner dim), NOT a light 2B. It was tested as a fast `draft` and OOMed a 12GB card at
+# model-cpu-offload; via sequential offload it is slower than the base draft, so it does not serve as a
+# fast preview. A genuinely-faster distilled draft would need a 2B distilled model (e.g. 0.9.6-distilled)
+# -- a parked follow-up, not wired here. Details in docs/proof/BENCH-13B.md.
+LTX_BASE = "Lightricks/LTX-Video"                                 # base 2B i2v (draft + standard) -- proven, safe default
+LTX_13B_DISTILLED = "Lightricks/LTX-Video-0.9.8-13B-distilled"   # 13B distilled (final) -- quality ceiling, proven to fit 12GB
+LTX_SPATIAL_UPSAMPLER = "Lightricks/ltxv-spatial-upscaler-0.9.7"  # optional generate-low-then-upscale latent upsampler (wired, off)
 
 
 @dataclass(frozen=True)
@@ -65,36 +84,48 @@ class TierConfig:
     frame-count is derived per shot (config.py never fixes a film's length)."""
 
     model: str
-    steps: int             # base LTX i2v: ~25-50 denoise steps (validated on the card)
-    guidance_scale: float  # base LTX i2v sampling ~3.0 (the model card default)
+    steps: int             # base LTX i2v ~25-50 denoise steps; the 13B-distilled variant runs few-step (~10)
+    guidance_scale: float  # base LTX i2v ~3.0 (model-card default); the distilled 13B runs CFG-free (~1.0)
     width: int             # must be divisible by 32 (LTX constraint), enforced in i2v_ltx.snap_dim
     height: int
     max_frames: int        # ceiling for this tier (snapped to 8k+1 by i2v_ltx.snap_frames)
     offload: Offload
     vae_tiling: bool       # decode the VAE in tiles to bound peak decode VRAM (the big 12GB saver)
+    engine: Engine         # which diffusers pipeline class this tier drives (base i2v vs condition)
+    upsampler: str | None  # optional spatial latent upsampler for generate-low-then-upscale (None = off)
 
 
-# The honest 12GB ladder, VALIDATED on the shipped container under an 11GB VRAM cap
-# (docs/proof/RESULTS.md): ALL THREE tiers pass, peak ~9.78GB reserved with model-cpu-offload + VAE
-# tiling. Same base model per tier; the tiers differ by resolution + steps (speed vs fidelity). The
-# heavier 13B path is a documented follow-up.
+# The 12GB tier ladder, all VALIDATED on real silicon. `draft` + `standard` are the PROVEN base 2B i2v
+# (docs/proof/RESULTS.md); `final` is the 13B-distilled variant via the CONDITION pipeline, PROVEN under
+# a hard 12GB allocator cap (docs/proof/BENCH-13B.md: peak reserved 4.63GB, 108.4s/clip). Same base
+# model for draft/standard (they differ by resolution + steps); final trades the engine for quality.
 _TIERS: dict[QualityTier, TierConfig] = {
-    # Fast preview: measured 48.6s/clip, peak 9.76GB reserved under the 11GB cap (docs/proof).
+    # Fast preview: the PROVEN base 2B i2v at low res / 25 steps (measured 48.6s/clip, peak ~9.76GB under
+    # the 11GB cap; docs/proof/RESULTS.md). The base engine is the fast draft path. A 13B distilled draft
+    # was tested and REJECTED (0.9.7-distilled is a 13B model, OOMs at model-offload / slower than base
+    # via sequential offload -- docs/proof/BENCH-13B.md), so draft stays base for speed.
     QualityTier.DRAFT: TierConfig(
         model=LTX_BASE, steps=25, guidance_scale=3.0,
         width=512, height=320, max_frames=97, offload=Offload.MODEL_CPU_OFFLOAD, vae_tiling=True,
+        engine=Engine.BASE_I2V, upsampler=None,
     ),
-    # The comfortable middle: measured 132.0s/clip, peak 9.78GB reserved under the 11GB cap (docs/proof).
+    # The comfortable middle: the PROVEN base i2v (704x512 / 121f / 40 steps, measured 132.0s/clip, peak
+    # 9.78GB under the 11GB cap in docs/proof/RESULTS.md; re-measured 10.49GB / 142.2s under the hard 12GB
+    # cap in docs/proof/BENCH-13B.md). The safe default engine.
     QualityTier.STANDARD: TierConfig(
         model=LTX_BASE, steps=40, guidance_scale=3.0,
         width=704, height=512, max_frames=121, offload=Offload.MODEL_CPU_OFFLOAD, vae_tiling=True,
+        engine=Engine.BASE_I2V, upsampler=None,
     ),
-    # The card's HONEST ceiling: the base model at a higher resolution + more steps. Measured
-    # 171.6s/clip, peak 9.78GB reserved under the 11GB cap (docs/proof). NOT datacenter parity; the
-    # 13B path is the future quality tier.
+    # The card's HONEST quality ceiling: the 13B-distilled variant via the CONDITION pipeline. 13B
+    # weights are far larger than the base 2B, so this tier pages per-layer (SEQUENTIAL cpu offload) +
+    # VAE tiling to hold the budget. PROVEN under a hard 12GB allocator cap on a 20GB card: peak reserved
+    # 4.63GB (7.4GB headroom), 108.4s/clip warm -- fewer steps (distilled) make it FASTER than standard
+    # while higher quality (docs/proof/BENCH-13B.md). A true-12GB-card confirmation run is still pending.
     QualityTier.FINAL: TierConfig(
-        model=LTX_BASE, steps=50, guidance_scale=3.0,
-        width=768, height=512, max_frames=121, offload=Offload.MODEL_CPU_OFFLOAD, vae_tiling=True,
+        model=LTX_13B_DISTILLED, steps=10, guidance_scale=1.0,
+        width=768, height=512, max_frames=121, offload=Offload.SEQUENTIAL_CPU_OFFLOAD, vae_tiling=True,
+        engine=Engine.CONDITION, upsampler=None,
     ),
 }
 
@@ -125,12 +156,16 @@ class I2VConfig:
     offload: Offload
     vae_tiling: bool
     negative_prompt: str
+    engine: Engine
+    upsampler: str | None
 
     @classmethod
     def from_request(cls, cfg: dict, *, tier: QualityTier | None = None) -> "I2VConfig":
         """Build from the i2v_clip job's `config` dict. The tier baseline is the source of truth; the
         caller may narrow (never widen) it. width/height/num_frames default to the tier; an explicit
         value is clamped to the tier ceiling so a caller can never push the card past its honest fit.
+        The engine + upsampler are FIXED by the tier (not caller-overridable): they are the proven fit,
+        not a knob a request may widen.
         """
         cfg = cfg or {}
         t = tier or QualityTier.parse(cfg.get("quality"))
@@ -150,6 +185,7 @@ class I2VConfig:
             width=width, height=height, num_frames=num_frames, fps=fps, seed=seed,
             flow_shift=flow_shift, offload=base.offload, vae_tiling=base.vae_tiling,
             negative_prompt=str(cfg.get("negative_prompt") or ""),
+            engine=base.engine, upsampler=base.upsampler,
         )
 
 
