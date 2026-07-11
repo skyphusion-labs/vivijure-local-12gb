@@ -1,5 +1,13 @@
 """The honest 12GB tier->engine mapping (no GPU)."""
-from vivijure_local.config import I2VConfig, Offload, QualityTier, tier_config
+from vivijure_local.config import (
+    Engine,
+    I2VConfig,
+    LTX_13B_DISTILLED,
+    LTX_BASE,
+    Offload,
+    QualityTier,
+    tier_config,
+)
 
 
 def test_tier_parse_is_lenient_and_defaults_to_standard():
@@ -9,22 +17,47 @@ def test_tier_parse_is_lenient_and_defaults_to_standard():
     assert QualityTier.parse(None) is QualityTier.STANDARD
 
 
-def test_the_three_tiers_map_to_distinct_honest_configs():
+def test_the_three_tiers_map_to_distinct_honest_engine_configs():
     draft, std, final = (tier_config(t) for t in (QualityTier.DRAFT, QualityTier.STANDARD, QualityTier.FINAL))
-    # draft is the lightest/fastest; final is the card's honest ceiling (higher res + more steps).
+    # draft + standard stay the PROVEN base 2B i2v (the safe default engine); final is the 13B-distilled
+    # quality ceiling on the CONDITION pipeline (#1, docs/proof/BENCH-13B.md).
+    assert draft.engine is Engine.BASE_I2V and draft.model == LTX_BASE
+    assert std.engine is Engine.BASE_I2V and std.model == LTX_BASE
+    assert final.engine is Engine.CONDITION and final.model == LTX_13B_DISTILLED
+    # draft is the lightest/fastest; final is the card's honest quality ceiling (higher res).
     assert draft.width <= std.width <= final.width
-    assert final.steps > std.steps > draft.steps           # tiers differ by steps (fidelity), validated
-    assert all(t.offload is Offload.MODEL_CPU_OFFLOAD for t in (draft, std, final))  # base i2v fits 12GB at model-offload (~10.4GB measured)
-    assert all(t.vae_tiling for t in (draft, std, final))   # tiling everywhere (the big 12GB saver)
+    # base tiers run the full step ladder with CFG; the distilled 13B runs few-step, CFG-free.
+    assert draft.steps < std.steps
+    assert final.steps < std.steps and final.guidance_scale == 1.0
+    assert draft.guidance_scale > 1.0 and std.guidance_scale > 1.0
+    # 13B is far larger than base 2B, so final pages per-layer (sequential); base tiers fit at
+    # model-cpu-offload. Tiling everywhere (the big 12GB saver).
+    assert final.offload is Offload.SEQUENTIAL_CPU_OFFLOAD
+    assert draft.offload is Offload.MODEL_CPU_OFFLOAD and std.offload is Offload.MODEL_CPU_OFFLOAD
+    assert all(t.vae_tiling for t in (draft, std, final))
+    # No tier ships the optional upsampler enabled (wired + unit-tested; pending a live upsampler bench).
+    assert all(t.upsampler is None for t in (draft, std, final))
 
 
-def test_from_request_uses_the_tier_baseline():
-    cfg = I2VConfig.from_request({"quality": "standard"})
-    base = tier_config(QualityTier.STANDARD)
-    assert cfg.tier is QualityTier.STANDARD
+def test_from_request_uses_the_tier_baseline_including_engine():
+    cfg = I2VConfig.from_request({"quality": "final"})
+    base = tier_config(QualityTier.FINAL)
+    assert cfg.tier is QualityTier.FINAL
     assert cfg.model == base.model
     assert cfg.steps == base.steps
     assert cfg.width == base.width and cfg.height == base.height
+    # engine + upsampler are FIXED by the tier (the proven fit), carried onto the per-shot config.
+    assert cfg.engine is base.engine and cfg.upsampler is base.upsampler
+
+
+def test_engine_and_upsampler_are_not_caller_overridable():
+    # A request cannot widen the engine/upsampler past the tier's proven fit (they are not knobs).
+    cfg = I2VConfig.from_request(
+        {"quality": "standard", "engine": "condition", "upsampler": "Lightricks/ltxv-spatial-upscaler-0.9.7"}
+    )
+    base = tier_config(QualityTier.STANDARD)
+    assert cfg.engine is base.engine is Engine.BASE_I2V
+    assert cfg.upsampler is None
 
 
 def test_caller_can_narrow_but_never_widen_past_the_honest_ceiling():

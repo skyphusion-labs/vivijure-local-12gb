@@ -105,3 +105,29 @@ The costed plan is in [`live-benchmark-plan.md`](./live-benchmark-plan.md).
   https://stability.ai/license
 - AnimateDiff repo/license + diffusers pipelines: https://github.com/guoyww/AnimateDiff ,
   https://github.com/huggingface/diffusers/blob/main/docs/source/en/api/pipelines/animatediff.md
+
+## Measured update (#1, 2026-07): the shipped 12GB tier mapping
+
+The desk-research table above was written before the 13B path was benchmarked. Two facts changed on
+real silicon (full proof: [`proof/BENCH-13B.md`](./proof/BENCH-13B.md), measured under a hard 12GB
+allocator cap):
+
+1. **`Lightricks/LTX-Video-0.9.7-distilled` is a 13B-class model**, not a light 2B (transformer config:
+   48 layers, inner dim 4096; the base `LTX-Video` is the 2B at 28 layers / 2048). So it cannot serve as
+   a fast `draft`: at model-cpu-offload a 13B OOMs a 12GB card, and via sequential offload it is slower
+   than the base draft.
+2. **The 13B-distilled `final` tier FITS 12GB comfortably** via sequential (per-layer) CPU offload + VAE
+   tiling: peak reserved 4.63 GB, 108.4s per 768x512 5s clip -- faster than `standard` (fewer distilled
+   steps) and higher quality.
+
+Shipped mapping (`src/vivijure_local/config.py`):
+
+| Tier | Model | Steps | Resolution | Offload | Engine | Intent |
+|---|---|---|---|---|---|---|
+| `draft` | LTX-Video (base 2B) | 25 | 512x320 | model CPU offload + VAE tiling | LTXImageToVideoPipeline | fast preview (~49s) |
+| `standard` | LTX-Video (base 2B) | 40 | 704x512 | model CPU offload + VAE tiling | LTXImageToVideoPipeline | the comfortable middle (~132-142s) |
+| `final` | LTX-Video-0.9.8-13B-distilled | 10 | 768x512 | sequential CPU offload + VAE tiling | LTXConditionPipeline | 13B quality ceiling, PROVEN 12GB (108s, 4.63GB reserved) |
+
+A genuinely-faster distilled `draft` would need a real 2B distilled model (e.g.
+`Lightricks/LTX-Video-0.9.6-distilled`); that is a parked follow-up, not wired, so the model choice stays
+a deliberate decision rather than a silent swap.
