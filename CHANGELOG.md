@@ -3,6 +3,18 @@
 All notable changes to vivijure-local-12gb are recorded here. This project follows SemVer-style
 `0.MINOR.PATCH` while pre-1.0 (PATCH for fixes and backend tweaks, MINOR for features).
 
+## v0.3.1 -- 2026-07-11
+
+Fix: `/cancel` now actually aborts a running render (#87, PR #88).
+
+- The engine step callback swallowed ALL exceptions (`except Exception: pass`), including the
+  `core.jobs.Cancelled` signal the job registry raises to abort a render between denoise steps. So
+  `POST /cancel` returned `{ok: true}` while the denoise ran to completion and shipped a full clip --
+  a silent no-op (and a silent-degrade violation). The callback now re-raises `Cancelled` and swallows
+  only genuine progress-reporting errors, so a cancel aborts the denoise at the next step. Hermetic
+  tests assert a `Cancelled` raised in the step callback aborts the denoise loop (RED->GREEN); proven
+  live on the card (S36).
+
 ## v0.3.0 -- 2026-07-11
 
 The 13B quality tier (#1, PR #83): `final` now renders through the 13B-distilled model.
