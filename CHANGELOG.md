@@ -3,6 +3,24 @@
 All notable changes to vivijure-local-12gb are recorded here. This project follows SemVer-style
 `0.MINOR.PATCH` while pre-1.0 (PATCH for fixes and backend tweaks, MINOR for features).
 
+## v0.4.0 -- 2026-07-12
+
+Feature: `VIVIJURE_OFFLOAD` operator knob to pick the diffusers offload mode (#91).
+
+- A big-VRAM operator can now run LTX RESIDENT on the card instead of being forced through per-step
+  offload. Set `VIVIJURE_OFFLOAD=none` (whole model resident, fastest, needs a big card, roughly
+  20GB+), `=model` (page whole pieces to CPU), or `=sequential` (per-layer paging: the low-VRAM
+  fallback, what the 13B `final` tier uses to fit 12GB). When set it applies to EVERY tier.
+- UNSET (the default) keeps each tier hardcoded offload byte-for-byte, so an existing install is
+  UNCHANGED -- draft/standard still page whole pieces, final still pages per-layer for the 12GB fit.
+- An invalid value FAILS LOUD at startup with the valid list, never a silent default (the honesty rule).
+- The engine already had the resident path (`pipe.to("cuda")`); this wires the env override into
+  `config.from_request` and validates it at boot (`server.validate_offload_or_exit`). Hermetic CPU
+  tests cover the parse, the per-tier override, the unset==default guarantee, and the startup guard.
+- Shares the byte-identical `core` change with the sibling 16GB door (16gb#74 / v0.3.0). The fastest
+  offload mode that fits is card-dependent; on a 12GB card leave it unset, `none` is for the 20GB+
+  operator.
+
 ## v0.3.1 -- 2026-07-11
 
 Fix: `/cancel` now actually aborts a running render (#87, PR #88).

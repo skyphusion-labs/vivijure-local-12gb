@@ -71,6 +71,23 @@ Copy `.env.example` to `.env` and fill these in. Only the R2 keys are required.
 - **Example:** on a 12GB card, `VIVIJURE_MAX_VRAM_GB=11` leaves about 1GB for everything else. A number
   as big as or bigger than your card is the same as leaving it blank.
 
+### `VIVIJURE_OFFLOAD`
+- **What it is:** how the render trades speed for graphics memory (VRAM). Three modes:
+  `none` (keep the whole model resident on the GPU: fastest, no per-step shuffling, but needs a big
+  card), `model` (page whole pieces of the model to system RAM between uses), `sequential` (page
+  piece-by-piece: slowest, smallest footprint, what the heavy `final` (13B) tier uses to fit 12GB).
+- **Why:** on a big card (roughly 20GB or more) the per-tier default shuffles the model on and off the
+  GPU even though the card could hold more of it. Setting `none` runs resident and skips that
+  shuffling, so each clip renders faster; `model` is a middle ground for a mid-size card.
+- **Required?** No.
+- **Default:** blank, which keeps each quality tier own safe setting (draft/standard page whole pieces,
+  final pages piece-by-piece for the 12GB fit). Nothing changes unless you set this.
+- **Applies to:** every tier at once (draft, standard, final).
+- **Example:** `VIVIJURE_OFFLOAD=none` on a 20GB+ card renders resident (faster). On a 12GB card leave
+  it blank -- forcing `none` there runs out of memory, especially on the 13B `final` tier.
+- **Bad value:** the backend refuses to start and tells you the valid modes, rather than quietly using
+  the default. Fix the value (or unset it) and start again.
+
 ---
 
 ## 2. Built-in settings (set for you in `docker-compose.yml`)
