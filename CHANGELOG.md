@@ -3,6 +3,22 @@
 All notable changes to vivijure-local-12gb are recorded here. This project follows SemVer-style
 `0.MINOR.PATCH` while pre-1.0 (PATCH for fixes and backend tweaks, MINOR for features).
 
+## v0.3.0 -- 2026-07-11
+
+The 13B quality tier (#1, PR #83): `final` now renders through the 13B-distilled model.
+
+- **`final` = LTX-Video-0.9.8-13B-distilled** via `LTXConditionPipeline` (LTXVideoCondition input),
+  sequential (per-layer) CPU offload + VAE tiling: peak 4.63GB reserved under a HARD 12GB allocator
+  cap on real silicon, 108.4s/clip warm at 768x512 -- higher quality AND faster than `standard`
+  (10 distilled steps vs 40). Proof: docs/proof/BENCH-13B.md (+ raw JSON and real sample clips).
+- **`draft` and `standard` stay the proven base 2B** (fast + fitting). The bench showed
+  0.9.7-distilled is itself 13B-class (48 layers / 4096 dim), so a distilled draft would OOM or be
+  slower than base; rejected per the honesty gate. A real 2B distilled draft is #84.
+- The CONDITION engine path, `is_distilled` output flag, and an optional generate-low-then-upscale
+  spatial upsampler ship wired + unit-tested (upsampler OFF pending a live bench). 80 hermetic tests.
+- HONESTY: "fits a hard 12GB allocator cap" is the proven claim; a flat "runs on a 12GB card" for
+  `final` stays PENDING a true-12GB confirmation run (CUDA context lives outside the cap).
+
 ## v0.2.1 -- 2026-07-10
 
 Publish build fix; the render engine is unchanged.
