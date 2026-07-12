@@ -3,6 +3,26 @@
 All notable changes to vivijure-local-12gb are recorded here. This project follows SemVer-style
 `0.MINOR.PATCH` while pre-1.0 (PATCH for fixes and backend tweaks, MINOR for features).
 
+## v0.5.0 -- 2026-07-12
+
+Root fix for the `/status` stall (#94, the LTX-door half of vivijure#719).
+
+- **Render isolated in a worker subprocess (#94).** Byte-identical shared-core port of the 16GB door
+  fix (vivijure-local-16gb#77 / #78). The door served HTTP from a `ThreadingHTTPServer` whose `/status`
+  handler thread shared the GIL with the in-process render; each LTX sampler step holds the GIL in a
+  single C-level torch call, so a poll landing in that window stalled and timed out on a HEALTHY render.
+  The render now runs in a persistent worker SUBPROCESS (`core/render_worker.py`) driven by the HTTP
+  process over a small newline-JSON IPC protocol (`core/worker_client.py`); the HTTP process blocks
+  off-GIL, so `/status` stays sub-second at every percentile. The `/status`, `/cancel`, and `i2v_clip`
+  contracts are byte-identical; the worker keeps the model warm (only the first job loads it); cancel is
+  terminate + respawn (process death reclaims all CUDA/VRAM); a worker crash fails the job honestly
+  instead of hanging; `apply_vram_cap` now runs in the worker (the process that loads the model). No API
+  change (MINOR for the architecture change).
+- The fix core is byte-identical to the 16GB door; its live proof on the standing-door card (`/status`
+  p99 ~6166 ms -> 1.1 ms during a completed render) is recorded once, in the 16GB repo:
+  `vivijure-local-16gb docs/proof/SUBPROCESS-S38.md`. This door shares that core verbatim, so the same
+  isolation guarantee holds; the exact LTX per-step magnitude was not separately benched.
+
 ## v0.4.1 -- 2026-07-12
 
 Feature: the door omits the duration grid on `/health` for the LTX door (#707).
