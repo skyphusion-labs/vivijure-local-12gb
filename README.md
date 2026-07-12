@@ -140,22 +140,28 @@ and the ordered flip) is in **[docs/INTEGRATION.md](docs/INTEGRATION.md)**.
 (the dry comparison is [docs/i2v-model-selection.md](docs/i2v-model-selection.md)): the lightest real
 i2v model, few-step distilled (fast on a consumer card), and the cleanest license for a freely-given
 AGPL project. The three quality tiers map to LTX configs a 12GB card can honestly deliver -- `final` is
-the card's honest ceiling, not datacenter parity.
+the card's honest ceiling, not datacenter parity. `draft` and `standard` run the base 2B i2v; `final`
+runs the **13B-distilled** variant (via `LTXConditionPipeline`), paged per-layer to fit 12GB.
 
-| Tier | Resolution | Frames | Steps | Peak VRAM (11GB cap) | sec/clip |
-|---|---|---|---|---|---|
-| `draft` | 512x320 | 97 | 25 | ~9.76 GB | 48.6s |
-| `standard` | 704x512 | 121 (~5s) | 40 | ~9.78 GB | 132.0s |
-| `final` | 768x512 | 121 (~5s) | 50 | ~9.78 GB | 171.6s |
+| Tier | Model | Resolution | Frames | Steps | Offload | Peak VRAM | sec/clip |
+|---|---|---|---|---|---|---|---|
+| `draft` | LTX-Video 2B | 512x320 | 97 | 25 | model | ~9.76 GB | 48.6s |
+| `standard` | LTX-Video 2B | 704x512 | 121 (~5s) | 40 | model | ~9.78 GB | 132.0s |
+| `final` | LTX 13B-distilled | 768x512 | 121 (~5s) | 10 | sequential | ~4.63 GB | 108.4s |
 
-All tiers use LTX-Video (base) with model-CPU-offload + VAE tiling.
+`draft` + `standard` peaks are measured under an 11GB allocator cap
+([docs/proof/RESULTS.md](docs/proof/RESULTS.md)); `final`'s under a hard 12GB allocator cap
+([docs/proof/BENCH-13B.md](docs/proof/BENCH-13B.md)). CPU offload + VAE tiling bound the base tiers'
+peak flat, so the heavier base tier costs time, not VRAM.
 
-> VALIDATED on the real shipped container at a **12GB VRAM budget** (`VIVIJURE_MAX_VRAM_GB=11` on a
-> 15.7GB Ada card; [docs/proof/RESULTS.md](docs/proof/RESULTS.md)): all three tiers render with **NO
-> OOM** at ~9.78GB peak reserved (~1.2GB headroom), cold load 34.4s. `final` (768x512 / 121f / 50 steps)
-> is now proven. Peak is FLAT across tiers (offload + VAE tiling bound it), so higher tiers cost time,
-> not VRAM. Verified two ways: the engine directly AND the live `/run` + R2 path. The few-step distilled
-> + 13B path (better quality, via LTXConditionPipeline) is a follow-up; the base i2v above is proven.
+> VALIDATED on the real shipped container. The base tiers (`draft` / `standard`, base 2B i2v) render with
+> **NO OOM** at ~9.78GB peak reserved under an 11GB budget (`VIVIJURE_MAX_VRAM_GB=11` on a 15.7GB Ada
+> card, cold load 34.4s), verified two ways: the engine directly AND the live `/run` + R2 path
+> ([docs/proof/RESULTS.md](docs/proof/RESULTS.md)). The `final` tier (13B-distilled, few-step, via
+> `LTXConditionPipeline`) is PROVEN to FIT a hard 12GB allocator cap at 4.63GB peak reserved (7.4GB
+> headroom) and 108.4s/clip -- FASTER than `standard` because the distilled variant needs only 10 steps
+> ([docs/proof/BENCH-13B.md](docs/proof/BENCH-13B.md)). A true-12GB-card confirmation run for `final` is
+> still pending (parked): fit is proven under a hard allocator cap, not yet claimed on a physical 12GB card.
 
 ## The job API (RunPod-compatible)
 

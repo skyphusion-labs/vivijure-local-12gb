@@ -162,15 +162,20 @@ To start completely fresh (re-download models, new token), remove these with
 ## The quality tiers
 
 The Studio's tier names map to LTX settings a 12GB card can honestly deliver. `final` is the card's
-honest ceiling, not datacenter quality. All tiers use LTX-Video with model-CPU-offload plus VAE tiling,
-which is what keeps the peak memory flat, so higher tiers cost time, not memory. These numbers were
-measured on the real shipped container at a 12GB budget (see `docs/proof/RESULTS.md`).
+honest ceiling, not datacenter quality. `draft` and `standard` run the base 2B i2v with model-CPU-offload
+plus VAE tiling (which keeps their peak memory flat, so the heavier of the two costs time, not memory);
+`final` runs the 13B-distilled variant via `LTXConditionPipeline`, paged per-layer (sequential offload)
+plus VAE tiling to fit the 12GB budget.
 
-| Tier | Resolution | Frames | Steps | Peak VRAM (11GB cap) | sec/clip |
-|---|---|---|---|---|---|
-| `draft` | 512x320 | 97 | 25 | ~9.76 GB | 48.6s |
-| `standard` | 704x512 | 121 (~5s) | 40 | ~9.78 GB | 132.0s |
-| `final` | 768x512 | 121 (~5s) | 50 | ~9.78 GB | 171.6s |
+| Tier | Model | Resolution | Frames | Steps | Offload | Peak VRAM | sec/clip |
+|---|---|---|---|---|---|---|---|
+| `draft` | LTX-Video 2B | 512x320 | 97 | 25 | model | ~9.76 GB | 48.6s |
+| `standard` | LTX-Video 2B | 704x512 | 121 (~5s) | 40 | model | ~9.78 GB | 132.0s |
+| `final` | LTX 13B-distilled | 768x512 | 121 (~5s) | 10 | sequential | ~4.63 GB | 108.4s |
+
+`draft` + `standard` peaks were measured under an 11GB allocator cap (`docs/proof/RESULTS.md`); `final`'s
+under a hard 12GB allocator cap (`docs/proof/BENCH-13B.md`: 7.4GB headroom, 108.4s/clip -- the distilled
+10-step engine makes it faster than `standard`). A true-12GB-card confirmation run for `final` is parked.
 
 ---
 

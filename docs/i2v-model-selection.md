@@ -77,6 +77,11 @@ OOM -- see `docs/proof/RESULTS.md`.)
 | `standard` | LTX-Video (base) | 40 | 704x512 | 121 (~5s @ 24fps) | model CPU offload + VAE tiling | the comfortable middle (125.6s) |
 | `final` | LTX-Video (base) | 50 | 768x512 | 121 | model CPU offload + VAE tiling | the card's honest ceiling |
 
+> **Superseded by measurement.** This is the pre-benchmark desk-research mapping. The SHIPPED mapping
+> (base 2B for `draft` / `standard`, **13B-distilled for `final`** at 10 steps / sequential offload) is
+> the "Measured update (#1)" section at the end of this page; where the two differ, the measured one is
+> authoritative.
+
 The pure VRAM budgeter (`src/vivijure_local/vram.py`) estimates each tier's peak against the 12GB floor
 and picks the weakest offload that fits, conservatively (it would rather page more than OOM the user's
 only GPU). All three tiers are estimated to fit the floor; the live benchmark replaces the coarse
