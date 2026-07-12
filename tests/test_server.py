@@ -244,3 +244,14 @@ def test_validate_offload_exits_with_plain_message_when_invalid(monkeypatch):
     blob = "\n".join(logs)
     assert "VIVIJURE_OFFLOAD" in blob and "invalid" in blob
     assert "Traceback" not in blob  # a plain, actionable message, never a stack trace
+
+
+# --- /health duration_grid (#707): the LTX door has NO fixed grid and OMITS the block ------------------
+
+def test_health_omits_duration_grid_for_the_ltx_door():
+    # LTX scales resolution + frames per tier with no fixed-grid ceiling, so this door declares NO
+    # duration_grid; its absence on /health means "no declared constraint" (#707). The byte-identical
+    # core reads door.DURATION_GRID via getattr, so the block simply does not appear here.
+    code, body = route("GET", "/health", None, registry=_reg(), token=None, expected_token=TOK)
+    assert code == 200 and body["ok"] is True
+    assert "duration_grid" not in body

@@ -3,6 +3,16 @@
 All notable changes to vivijure-local-12gb are recorded here. This project follows SemVer-style
 `0.MINOR.PATCH` while pre-1.0 (PATCH for fixes and backend tweaks, MINOR for features).
 
+## v0.4.1 -- 2026-07-12
+
+Feature: the door omits the duration grid on `/health` for the LTX door (#707).
+
+- Companion to the 16GB door change. The door is the declaring source for its clip-length grid on
+  `/health`; LTX scales resolution + frames per tier with no fixed grid, so this door declares NO
+  `duration_grid` (its absence means "no declared constraint"). The byte-identical core reads
+  `door.DURATION_GRID` via `getattr`; this door defines no such attribute, so `/health` omits the
+  block. Hermetic test asserts the omission. No engine change.
+
 ## v0.4.0 -- 2026-07-12
 
 Feature: `VIVIJURE_OFFLOAD` operator knob to pick the diffusers offload mode (#91).
