@@ -37,6 +37,11 @@ open -- it returns **503** when `LOCAL_BACKEND_TOKEN` is unset (refuse to run op
 token when you leave it blank (the `ready` banner prints it); `/health` and the no-GPU selftest stay
 open for liveness. The module sends the token as `Authorization: Bearer <token>`.
 
+**No duration grid on `/health`.** Unlike the fixed-grid CogVideoX (16gb) door, LTX scales resolution +
+frames per tier with no fixed clip-length grid, so this door declares NO `duration_grid` block on
+`/health` (#707). Its absence tells the control plane "no declared clip-length constraint", so the studio
+does not preflight a fixed ceiling against this door.
+
 ## Progress and status semantics (poll-only)
 
 There is **no sub-step progress channel**. `GET /status/<id>` returns only the RunPod-compatible

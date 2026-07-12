@@ -76,15 +76,19 @@ Copy `.env.example` to `.env` and fill these in. Only the R2 keys are required.
   `none` (keep the whole model resident on the GPU: fastest, no per-step shuffling, but needs a big
   card), `model` (page whole pieces of the model to system RAM between uses), `sequential` (page
   piece-by-piece: slowest, smallest footprint, what the heavy `final` (13B) tier uses to fit 12GB).
-- **Why:** on a big card (roughly 20GB or more) the per-tier default shuffles the model on and off the
-  GPU even though the card could hold more of it. Setting `none` runs resident and skips that
-  shuffling, so each clip renders faster; `model` is a middle ground for a mid-size card.
+- **Why:** on a big card the per-tier default still shuffles the model on and off the GPU even though
+  the card could hold more of it. Setting `none` runs resident and skips that shuffling, so each clip
+  renders faster; `model` is a middle ground for a mid-size card. How big is "big" here is an UNMEASURED
+  estimate -- roughly 20GB+, never benched on this LTX door (unlike the 16gb CogVideoX door's measured
+  >28GB), and the 13B `final` resident may well exceed it. Treat 20GB+ as a starting point, not a
+  guarantee: if `none` OOMs, drop back to `model`.
 - **Required?** No.
 - **Default:** blank, which keeps each quality tier own safe setting (draft/standard page whole pieces,
   final pages piece-by-piece for the 12GB fit). Nothing changes unless you set this.
 - **Applies to:** every tier at once (draft, standard, final).
-- **Example:** `VIVIJURE_OFFLOAD=none` on a 20GB+ card renders resident (faster). On a 12GB card leave
-  it blank -- forcing `none` there runs out of memory, especially on the 13B `final` tier.
+- **Example:** `VIVIJURE_OFFLOAD=none` on a big card (est. 20GB+, unbenched -- see Why) renders resident
+  (faster). On a 12GB card leave it blank -- forcing `none` there runs out of memory, especially on the
+  13B `final` tier.
 - **Bad value:** the backend refuses to start and tells you the valid modes, rather than quietly using
   the default. Fix the value (or unset it) and start again.
 
@@ -162,15 +166,20 @@ To start completely fresh (re-download models, new token), remove these with
 ## The quality tiers
 
 The Studio's tier names map to LTX settings a 12GB card can honestly deliver. `final` is the card's
-honest ceiling, not datacenter quality. All tiers use LTX-Video with model-CPU-offload plus VAE tiling,
-which is what keeps the peak memory flat, so higher tiers cost time, not memory. These numbers were
-measured on the real shipped container at a 12GB budget (see `docs/proof/RESULTS.md`).
+honest ceiling, not datacenter quality. `draft` and `standard` run the base 2B i2v with model-CPU-offload
+plus VAE tiling (which keeps their peak memory flat, so the heavier of the two costs time, not memory);
+`final` runs the 13B-distilled variant via `LTXConditionPipeline`, paged per-layer (sequential offload)
+plus VAE tiling to fit the 12GB budget.
 
-| Tier | Resolution | Frames | Steps | Peak VRAM (11GB cap) | sec/clip |
-|---|---|---|---|---|---|
-| `draft` | 512x320 | 97 | 25 | ~9.76 GB | 48.6s |
-| `standard` | 704x512 | 121 (~5s) | 40 | ~9.78 GB | 132.0s |
-| `final` | 768x512 | 121 (~5s) | 50 | ~9.78 GB | 171.6s |
+| Tier | Model | Resolution | Frames | Steps | Offload | Peak VRAM | sec/clip |
+|---|---|---|---|---|---|---|---|
+| `draft` | LTX-Video 2B | 512x320 | 97 | 25 | model | ~9.76 GB | 48.6s |
+| `standard` | LTX-Video 2B | 704x512 | 121 (~5s) | 40 | model | ~9.78 GB | 132.0s |
+| `final` | LTX 13B-distilled | 768x512 | 121 (~5s) | 10 | sequential | ~4.63 GB | 108.4s |
+
+`draft` + `standard` peaks were measured under an 11GB allocator cap (`docs/proof/RESULTS.md`); `final`'s
+under a hard 12GB allocator cap (`docs/proof/BENCH-13B.md`: 7.4GB headroom, 108.4s/clip -- the distilled
+10-step engine makes it faster than `standard`). A true-12GB-card confirmation run for `final` is parked.
 
 ---
 
