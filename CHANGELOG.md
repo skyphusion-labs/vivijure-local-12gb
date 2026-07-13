@@ -3,6 +3,24 @@
 All notable changes to vivijure-local-12gb are recorded here. This project follows SemVer-style
 `0.MINOR.PATCH` while pre-1.0 (PATCH for fixes and backend tweaks, MINOR for features).
 
+## v1.0.0 -- 2026-07-13
+
+**First stable release of the LTX 12GB local-gpu door.** The mainstream self-host render path in the
+Vivijure constellation (LTX-Video i2v on a single 12GB-class card), output-verified end-to-end for
+Studio v1.0.0 and running live on propagandhi. `__version__` is bumped to `1.0.0`, so `/health` now
+reports the release version (closing the v0.5.1 version-string lag where `__version__` stayed `0.5.0`).
+
+Folds in the v0.5.1 storage fix that shipped without its own entry:
+
+- **`R2_S3_ENDPOINT` override for S3-compatible object stores (#100).** When `R2_S3_ENDPOINT` is set the
+  door talks to a non-CF endpoint (e.g. MinIO) and forces path-style addressing; unset, it derives the
+  Cloudflare R2 endpoint from the account id as before. This is what lets a door share a local MinIO
+  bucket with a self-hosted control panel (proven e2e: keyframe read + clip write against
+  `minio-flatliners`).
+
+Built on v0.5.0's subprocess-isolated render (#94, the `/status` stall root fix). The `v1.0.0` tag
+builds the consumer image; re-pull `:latest` on the host to run it.
+
 ## v0.5.0 -- 2026-07-12
 
 Root fix for the `/status` stall (#94, the LTX-door half of vivijure#719).
