@@ -31,7 +31,7 @@ flowchart TD
     slate[slate<br/>Discord screenwriter bot]
 
     subgraph core[The control plane]
-        studio[vivijure Studio<br/>projects, storyboard, cast,<br/>render orchestration + module registry]
+        studio[Vivijure Studio<br/>vivijure-cf or vivijure-local<br/>on vivijure-core]
     end
 
     subgraph modules[Modules: one job each, opt-in]
@@ -210,7 +210,7 @@ no submitter identity.
 
 Homelab builders with a **12GB consumer GPU** (e.g. RTX 3060 12GB, RTX 4070) who want Vivijure image-to-video locally without RunPod rent.
 
-**Vivijure Studio:** https://vivijure.com · **Welcome demo:** https://vivijure.skyphusion.org/welcome · **Skyphusion Labs:** https://skyphusion.org
+**Vivijure Studio:** https://vivijure.com · **Live demo:** https://demo.vivijure.com · **Skyphusion Labs:** https://skyphusion.org
 
 ## Support
 
