@@ -1,22 +1,33 @@
-# Dependabot config for vivijure-local-12gb.
-#
-# diffusers + transformers are PINNED to the 12GB-tier-validated LTX recipe (proven on real
-# hardware): diffusers==0.32.2 / transformers==4.46.3 on torch 2.4.1+cu124. diffusers 0.38+
-# breaks on torch 2.4 (its attention_dispatch custom_op needs torch>=2.5), and the transformers
-# line is tied to diffusers 0.32.2. Auto-bumping either breaks the build, so Dependabot ignores
-# them here; re-validate on real hardware before ever moving those pins by hand.
 version: 2
+
+# skyphusion-labs Dependabot standard — see fleet-chezmoi/docs/runbooks/dependabot-standard.md
+# PRs only (never auto-merge). Group minor/patch; majors stay separate. Peer families bump together.
 updates:
-  - package-ecosystem: "pip"
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: ci
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # Validated CUDA recipe pins — bump only after benchmark-gated manual testing.
+  - package-ecosystem: pip
     directory: "/"
     schedule:
-      interval: "weekly"
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: deps
     ignore:
       - dependency-name: "diffusers"
       - dependency-name: "transformers"
-      # av 18.x drops py3.10 wheels; the door image is py3.10. Docker build breaks, CI cannot see it.
+      - dependency-name: "torch"
+      - dependency-name: "torchvision"
       - dependency-name: "av"
-  - package-ecosystem: "github-actions"
-    directory: "/"
-    schedule:
-      interval: "weekly"
+    groups:
+      pip-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
