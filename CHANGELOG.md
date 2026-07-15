@@ -3,6 +3,19 @@
 All notable changes to vivijure-local-12gb are recorded here. This project follows SemVer-style
 `0.MINOR.PATCH` while pre-1.0 (PATCH for fixes and backend tweaks, MINOR for features).
 
+## Unreleased
+
+- **Split the image into a runtime base + a thin release layer to cut publish cost.** A new
+  `deploy/runtime.Dockerfile` (CUDA + torch + the render deps) is built rarely by a new
+  `runtime-build.yml` workflow (workflow_dispatch on a toolchain bump + a monthly CVE-refresh cron) and
+  published as `ghcr.io/skyphusion-labs/vivijure-local-12gb:runtime-t<N>`. `deploy/Dockerfile` is now
+  `FROM <runtime base>@digest` + COPY src (INCLUDE_SSH/entrypoint blocks preserved), so a src-only
+  release re-pushes only the app layer. Mirrors vivijure-local-16gb / vivijure-backend's runtime-base
+  pattern (no model-weights seed).
+- **Runner snapshot lane (`runner-snapshot.yml`) + warm-runner publish config.** Pre-pulls the runtime base
+  into `local-12gb-bake-snapshot` for cache-warm publish on `local-12gb-bake-snap` (enterprise UI).
+  `publish.yml` uses the docker buildx driver and drops `pull: true`.
+
 ## v1.0.0 -- 2026-07-13
 
 **First stable release of the LTX 12GB local-gpu door.** The mainstream self-host render path in the
