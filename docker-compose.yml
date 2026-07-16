@@ -26,7 +26,7 @@ services:
   # NONROOT cloudflared can create its tunnel logfile there, while the sticky bit stops it unlinking or
   # replacing root-owned files like /shared/token. Runs to completion before the long-lived services.
   init-shared:
-    image: ghcr.io/skyphusion-labs/vivijure-local-12gb:latest
+    image: ghcr.io/skyphusion-labs/vivijure-local-12gb:1.0.1
     pull_policy: missing
     entrypoint: ["sh", "-c"]
     command: ["mkdir -p /shared && chmod 1777 /shared && rm -f /shared/cf.log"]
@@ -42,7 +42,7 @@ services:
     build:
       context: .
       dockerfile: deploy/Dockerfile
-    image: ghcr.io/skyphusion-labs/vivijure-local-12gb:latest
+    image: ghcr.io/skyphusion-labs/vivijure-local-12gb:1.0.1
     pull_policy: missing
     restart: unless-stopped
     depends_on:
@@ -112,7 +112,7 @@ services:
   # The "ready" banner: waits for the tunnel up + backend healthy + token written, then prints the
   # copy-paste Backend URL + token ONCE and idles. The user reads THIS, never the raw logs.
   ready:
-    image: ghcr.io/skyphusion-labs/vivijure-local-12gb:latest
+    image: ghcr.io/skyphusion-labs/vivijure-local-12gb:1.0.1
     restart: unless-stopped
     depends_on:
       init-shared:

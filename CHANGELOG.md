@@ -5,16 +5,15 @@ All notable changes to vivijure-local-12gb are recorded here. This project follo
 
 ## Unreleased
 
-- **Split the image into a runtime base + a thin release layer to cut publish cost.** A new
-  `deploy/runtime.Dockerfile` (CUDA + torch + the render deps) is built rarely by a new
-  `runtime-build.yml` workflow (workflow_dispatch on a toolchain bump + a monthly CVE-refresh cron) and
-  published as `ghcr.io/skyphusion-labs/vivijure-local-12gb:runtime-t<N>`. `deploy/Dockerfile` is now
-  `FROM <runtime base>@digest` + COPY src (INCLUDE_SSH/entrypoint blocks preserved), so a src-only
-  release re-pushes only the app layer. Mirrors vivijure-local-16gb / vivijure-backend's runtime-base
-  pattern (no model-weights seed).
-- **Runner snapshot lane (`runner-snapshot.yml`) + warm-runner publish config.** Pre-pulls the runtime base
-  into `local-12gb-bake-snapshot` for cache-warm publish on `local-12gb-bake-snap` (enterprise UI).
-  `publish.yml` uses the docker buildx driver and drops `pull: true`.
+## v1.0.1 -- 2026-07-16
+
+PATCH release so production pins a **semver** consumer image that inherits the re-baked `runtime-t1`
+base (previously only visible as floating `runtime-t1*` tags newer than `1.0.0`).
+
+- **Inherit re-baked runtime base** (`RUNTIME_REF` repin #105) + thin-release bake lane (#103).
+- **deps:** pip-minor-patch group bump (#106).
+- **ci(publish):** warm snapshot runner wiring (#107).
+- **`__version__` -> 1.0.1**; `docker-compose.yml` pins `:1.0.1` (not `:latest` / not a SHA).
 
 ## v1.0.0 -- 2026-07-13
 
