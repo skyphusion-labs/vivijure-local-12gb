@@ -1,0 +1,18 @@
+# PROOF-ONLY overlay: adds an SSH keep-alive front to the proof image so a crew member can exec into
+# the secure RunPod pod and drive the server with their own env (R2 creds + LOCAL_BACKEND_TOKEN) without
+# those secrets passing through the pod config or the infra operator. NOT part of the shipped homelabber
+# image (deploy/Dockerfile); this layer exists only to run the 12GB VRAM proof on RunPod.
+#
+# openssh-server + host keys are baked at BUILD time (no apt at boot -> reliable start; the apt-at-boot
+# wrapper crash-looped). The container CMD authorizes $PUBLIC_KEY, starts sshd, then sleeps: the server
+# is NOT auto-started (serve() hard-requires R2 at boot by design), the operator starts it over SSH.
+FROM ghcr.io/skyphusion-labs/vivijure-local-backend:proof-12gb
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends openssh-server \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /run/sshd \
+    && ssh-keygen -A
+
+# Authorize the injected PUBLIC_KEY (one or more keys, newline-separated), start sshd, keep alive.
+CMD ["bash", "-lc", "mkdir -p /root/.ssh && printf '%s\\n' \"$PUBLIC_KEY\" > /root/.ssh/authorized_keys && chmod 700 /root/.ssh && chmod 600 /root/.ssh/authorized_keys && /usr/sbin/sshd -e && echo SSHD_UP && exec sleep infinity"]
