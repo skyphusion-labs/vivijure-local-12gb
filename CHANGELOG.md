@@ -5,12 +5,13 @@ All notable changes to vivijure-local-12gb are recorded here. This project follo
 
 ## Unreleased
 
+## v1.0.2 -- 2026-07-22
 
-### fix(i2v) -- honest clip-upload + job failure logs (local-12gb#99)
+PATCH. Honest failure surfaces for the LTX door (local-12gb#99 Defect 1).
 
-- Wrap clip PUT in contextual `RuntimeError` + stderr (mirrors keyframe GET).
-- Log every handled job failure to stderr so `docker logs` shows the real error.
-
+- **fix(i2v):** wrap clip PUT in contextual `RuntimeError` + stderr (mirrors keyframe GET).
+- **fix(jobs):** log every handled job failure to stderr so `docker logs` shows the real error.
+- Defect 2 (dead R2 key) was an earlier bring-up fix; this release is the observability code path.
 
 ## v1.0.1 -- 2026-07-16
 
