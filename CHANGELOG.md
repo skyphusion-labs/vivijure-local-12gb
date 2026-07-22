@@ -5,6 +5,8 @@ All notable changes to vivijure-local-12gb are recorded here. This project follo
 
 ## Unreleased
 
+- **fix(preview):** cast-less bundles no longer crash with `image_embeds in added_cond_kwargs`; IP-Adapter loads only when a cast ref image is present (matches vivijure-backend keyframe path).
+
 ## v1.0.3 -- 2026-07-22
 
 PATCH. Local-GPU keyframes on the door (vivijure-local#153).
