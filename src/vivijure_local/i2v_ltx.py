@@ -178,6 +178,19 @@ def _evict_pipe(cfg: I2VConfig, torch) -> None:
         pass
 
 
+def unload_all() -> None:
+    """Drop every cached i2v pipeline so a sibling preview job can claim the card (#153)."""
+    _PIPE_CACHE.clear()
+    _UPSAMPLER_CACHE.clear()
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except Exception:
+        pass
+
+
 # --------------------------------------------------------------------------- animate (GPU, deferred)
 
 def animate(shot_id: str, keyframe: Path, prompt: str, cfg: I2VConfig, out_path: Path, *, progress_cb=None) -> I2VResult:

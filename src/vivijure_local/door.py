@@ -15,3 +15,10 @@ def animate(*args, **kwargs):
     progress_cb) -> I2VResult` at CALL time (a live attribute lookup on the engine module, so tests can
     monkeypatch it; the engine module import is cheap, its torch/diffusers load stays deferred)."""
     return _engine.animate(*args, **kwargs)
+
+
+def unload_i2v() -> None:
+    """Drop resident i2v weights before a preview (keyframe) job claims the card (#153)."""
+    unload = getattr(_engine, "unload_all", None)
+    if callable(unload):
+        unload()
