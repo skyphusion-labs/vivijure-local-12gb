@@ -131,6 +131,42 @@ def unload_preview() -> None:
         pass
 
 
+def _reset_pipe_fail_closed() -> None:
+    """Drop the cached pipe so a poisoned IP-Adapter / LoRA state cannot leak to the next job."""
+    unload_preview()
+
+
+def _ensure_ip_adapter(pipe, n: int = 1) -> None:
+    """Bring the shared preview pipe to EXACTLY n IP-Adapter encoders (n=0 clears it).
+
+    Cast-less scenes (no ref image) must run plain SDXL. Loading IP-Adapter at pipe init and then
+    omitting ip_adapter_image makes diffusers raise (encoder_hid_dim_type='ip_image_proj' requires
+    image_embeds). Match vivijure-backend keyframe._ensure_ip_adapter: load only when a ref exists.
+
+    On unload/load failure, reset the process-global pipe and abort (local-12gb#123)."""
+    if getattr(pipe, "_vj_ip_loaded", 0) == n:
+        return
+    if getattr(pipe, "_vj_ip_loaded", 0):
+        try:
+            pipe.unload_ip_adapter()
+            pipe._vj_ip_loaded = 0
+        except Exception as e:
+            _reset_pipe_fail_closed()
+            raise RuntimeError(f"preview_sdxl: IP-Adapter unload failed ({e})") from e
+    if n:
+        try:
+            pipe.load_ip_adapter(
+                IP_ADAPTER_REPO,
+                subfolder=IP_ADAPTER_SUBFOLDER,
+                weight_name=IP_ADAPTER_WEIGHT,
+            )
+            pipe.set_ip_adapter_scale(0.7)
+            pipe._vj_ip_loaded = n
+        except Exception as e:
+            _reset_pipe_fail_closed()
+            raise RuntimeError(f"preview_sdxl: IP-Adapter load failed ({e})") from e
+
+
 def _unload_i2v() -> None:
     """Best-effort: ask the door engine to drop its resident i2v weights."""
     try:
@@ -141,30 +177,6 @@ def _unload_i2v() -> None:
             unload()
     except Exception:
         pass
-
-
-def _ensure_ip_adapter(pipe, n: int = 1) -> None:
-    """Bring the shared preview pipe to EXACTLY n IP-Adapter encoders (n=0 clears it).
-
-    Cast-less scenes (no ref image) must run plain SDXL. Loading IP-Adapter at pipe init and then
-    omitting ip_adapter_image makes diffusers raise (encoder_hid_dim_type='ip_image_proj' requires
-    image_embeds). Match vivijure-backend keyframe._ensure_ip_adapter: load only when a ref exists."""
-    if getattr(pipe, "_vj_ip_loaded", 0) == n:
-        return
-    if getattr(pipe, "_vj_ip_loaded", 0):
-        pipe.unload_ip_adapter()
-        pipe._vj_ip_loaded = 0
-    if n:
-        try:
-            pipe.load_ip_adapter(
-                IP_ADAPTER_REPO,
-                subfolder=IP_ADAPTER_SUBFOLDER,
-                weight_name=IP_ADAPTER_WEIGHT,
-            )
-            pipe.set_ip_adapter_scale(0.7)
-            pipe._vj_ip_loaded = n
-        except Exception as e:  # noqa: BLE001
-            print(f"preview_sdxl: IP-Adapter load failed ({e}); prompt-only identity", flush=True)
 
 
 def _get_pipe(few_step: bool):
@@ -197,15 +209,18 @@ def _get_pipe(few_step: bool):
 
 
 def _bind_pretrained_loras(pipe, staged: dict[str, Path]) -> list[str]:
-    """Attach staged LoRA adapters; returns adapter names to deactivate after the shot."""
+    """Attach staged LoRA adapters; returns adapter names to deactivate after the shot.
+
+    On bind failure, reset the process-global pipe and abort (local-12gb#123)."""
     names: list[str] = []
     for slot, path in staged.items():
         name = f"char_{slot}"
         try:
             pipe.load_lora_weights(str(path.parent), weight_name=path.name, adapter_name=name)
             names.append(name)
-        except Exception as e:  # noqa: BLE001
-            print(f"preview_sdxl: LoRA {slot} load failed ({e})", flush=True)
+        except Exception as e:
+            _reset_pipe_fail_closed()
+            raise RuntimeError(f"preview_sdxl: LoRA {slot} load failed ({e})") from e
     if names:
         try:
             # keep distill if present
@@ -216,8 +231,9 @@ def _bind_pretrained_loras(pipe, staged: dict[str, Path]) -> list[str]:
                     active.append(n)
                     weights.append(0.6)
             pipe.set_adapters(active, adapter_weights=weights)
-        except Exception as e:  # noqa: BLE001
-            print(f"preview_sdxl: set_adapters failed ({e})", flush=True)
+        except Exception as e:
+            _reset_pipe_fail_closed()
+            raise RuntimeError(f"preview_sdxl: set_adapters failed ({e})") from e
     return names
 
 

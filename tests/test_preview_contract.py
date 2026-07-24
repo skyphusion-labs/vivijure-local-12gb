@@ -339,3 +339,51 @@ def test_ensure_ip_adapter_loads_when_ref_present():
     assert pipe.loads == 1
     assert pipe._vj_ip_loaded == 1
     assert pipe.scales == [0.7]
+
+
+def test_ensure_ip_adapter_unload_failure_resets_pipe(monkeypatch):
+    import vivijure_local.preview_sdxl as mod
+
+    pipe = _FakePipe()
+    pipe._vj_ip_loaded = 1
+
+    def boom():
+        raise RuntimeError("unload broke")
+
+    pipe.unload_ip_adapter = boom
+    monkeypatch.setattr(mod, "_PIPE", pipe)
+    with pytest.raises(RuntimeError, match="unload failed"):
+        _ensure_ip_adapter(pipe, 0)
+    assert mod._PIPE is None
+
+
+def test_ensure_ip_adapter_load_failure_resets_pipe(monkeypatch):
+    import vivijure_local.preview_sdxl as mod
+
+    pipe = _FakePipe()
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("load broke")
+
+    pipe.load_ip_adapter = boom
+    monkeypatch.setattr(mod, "_PIPE", pipe)
+    with pytest.raises(RuntimeError, match="load failed"):
+        _ensure_ip_adapter(pipe, 1)
+    assert mod._PIPE is None
+
+
+def test_bind_pretrained_loras_load_failure_resets_pipe(tmp_path: Path, monkeypatch):
+    import vivijure_local.preview_sdxl as mod
+    from vivijure_local.preview_sdxl import _bind_pretrained_loras
+
+    class BadPipe:
+        def load_lora_weights(self, *args, **kwargs):
+            raise RuntimeError("lora broke")
+
+    pipe = BadPipe()
+    monkeypatch.setattr(mod, "_PIPE", pipe)
+    staged = {"A": tmp_path / "a.safetensors"}
+    staged["A"].write_bytes(b"x")
+    with pytest.raises(RuntimeError, match="LoRA A load failed"):
+        _bind_pretrained_loras(pipe, staged)
+    assert mod._PIPE is None
