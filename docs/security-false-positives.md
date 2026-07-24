@@ -15,3 +15,5 @@ The local-12gb stack runs on operator-controlled hardware with a single bearer t
 | 2026-07-23 | K3 verify ~18:04 | Token printed to banner logs | Homelab tunnel auth; operator reads token once at boot |
 | 2026-07-23 | K3 verify ~18:04 | Optional INCLUDE_SSH build arg | Gated off in shipped/CI images |
 | 2026-07-23 | K3 verify ~18:04 | RUNNER_GROUP_ADMIN_TOKEN in publish.yml | Org operator release workflow |
+| 2026-07-24 | K2.7 PR #127 | Bundle path traversal via symlink in `_open_bundle_image` | Pre-existing; homelab single-operator stack. Bundle bytes arrive via authenticated studio upload to operator R2; symlink escape requires crafting bundle content on that path. Tracked separately from #123; fix deferred. |
+| 2026-07-24 | K2.7 PR #127 | Process-global `_PIPE` cross-job state leak | Fixed in #127 for IP-Adapter/LoRA bind failure paths (`_reset_pipe_fail_closed` + re-raise). Residual medium findings (delete_adapters swallow, general render mid-flight) out of #123 scope; follow-up if multi-tenant. |
