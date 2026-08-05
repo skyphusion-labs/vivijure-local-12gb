@@ -85,9 +85,10 @@ docker compose up -d         # starts the server + its own tunnel (:8000 stays i
 docker compose logs ready    # the banner: your Backend URL + token, copy-paste ready
 ```
 
-`docker compose up` PULLS the prebuilt image from `ghcr.io/skyphusion-labs/vivijure-local-12gb:latest`
-(no local build; that is the whole ease-of-install point). Prefer to build from source? Run
-`docker compose up -d --build` instead and compose builds `deploy/Dockerfile` locally.
+`docker compose up` PULLS the prebuilt image pinned in `docker-compose.yml`
+(`ghcr.io/skyphusion-labs/vivijure-local-12gb:1.0.4`; no local build; that is the whole
+ease-of-install point). Prefer to build from source? Run `docker compose up -d --build` instead and
+compose builds `deploy/Dockerfile` locally.
 
 To update to a newer release, pull explicitly: `docker compose pull` then `docker compose up -d`.
 The compose file pins `pull_policy: missing`, so once the image is cached it never re-pulls on its
