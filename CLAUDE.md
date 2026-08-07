@@ -48,17 +48,16 @@ the matching doc.
 ## The job API (RunPod-compatible, `src/vivijure_local/core/server.py`)
 
 ```
-POST /run          { "input": { action:"i2v_clip", project, shot_id, prompt, keyframe_key?, config } } -> { "id" }
+POST /run          { "input": { action:"i2v_clip"|"preview"|"train_lora", ... } } -> { "id" }
 GET  /status/<id>  -> { id, status: IN_QUEUE|IN_PROGRESS|COMPLETED|FAILED, output?, error? }
 POST /cancel/<id>  -> { ok: true }   (idempotent)
 GET  /health       -> { ok: true, engine:"ltx-video", ... }
 POST /run { "selftest": true } -> a no-GPU transport probe
 ```
 
-The server owns an in-process **serial** job registry (a consumer card runs ONE i2v job at a time), the
-RunPod-lifecycle stand-in for a box with no serverless platform. Tiers: `draft` (512x320 / 97 frames),
-`standard` (704x512 / 121), `final` (768x512 / 121), all with model CPU offload + VAE tiling for the
-12GB floor. Validated under an 11GB VRAM cap with no OOM (docs/proof/RESULTS.md).
+Actions: `i2v_clip` (LTX motion), `preview` (SDXL keyframes), `train_lora` (SDXL cast UNet LoRA on
+this card; Wan family is rejected). Serial job registry: one GPU job at a time. Tiers for i2v:
+`draft` / `standard` / `final` with model CPU offload + VAE tiling for the 12GB floor (docs/proof/RESULTS.md).
 
 ## Commands
 
