@@ -86,7 +86,7 @@ docker compose logs ready    # the banner: your Backend URL + token, copy-paste 
 ```
 
 `docker compose up` PULLS the prebuilt image pinned in `docker-compose.yml`
-(`ghcr.io/skyphusion-labs/vivijure-local-12gb:1.0.4`; no local build; that is the whole
+(`ghcr.io/skyphusion-labs/vivijure-local-12gb:1.1.0`; no local build; that is the whole
 ease-of-install point). Prefer to build from source? Run `docker compose up -d --build` instead and
 compose builds `deploy/Dockerfile` locally.
 
