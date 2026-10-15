@@ -249,7 +249,7 @@ VIVIJURE_MAX_VRAM_GB=11
 Leave it blank to use the whole card (the default). A value at or above your card's real size is the
 same as leaving it blank. Note the cap is a ceiling, not a discount: if you set it below what a tier
 actually needs, that tier will OOM -- drop to a lower tier (`final` -> `standard` -> `draft`) or raise
-the cap. The startup log prints the applied cap, e.g. `VRAM capped to 11.0GB (0.917 of 12.0GB)`.
+the cap. The startup log prints the applied cap and the free memory it saw, and it warns when free memory is below the cap. Example: `VRAM capped to 11.0GB (0.917 of 12.0GB total, 11.2GB free)`.
 
 ### Troubleshooting
 
