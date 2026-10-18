@@ -27,6 +27,11 @@ updates:
       - dependency-name: "torch"
       - dependency-name: "torchvision"
       - dependency-name: "av"
+      # imageio 2.38.1 requires Python >=3.11. deploy/runtime.Dockerfile is
+      # nvidia/cuda:12.4.1-runtime-ubuntu22.04, which ships Python 3.10, so
+      # pip hides that release and the smoke build fails.
+      - dependency-name: "imageio"
+        versions: ["2.38.x"]
     groups:
       pip-minor-patch:
         patterns: ["*"]
