@@ -251,6 +251,8 @@ same as leaving it blank. Note the cap is a ceiling, not a discount: if you set 
 actually needs, that tier will OOM -- drop to a lower tier (`final` -> `standard` -> `draft`) or raise
 the cap. The startup log prints the applied cap and the free memory it saw, and it warns when free memory is below the cap. Example: `VRAM capped to 11.0GB (0.917 of 12.0GB total, 11.2GB free)`.
 
+`LOG_JOBS=1` prints one stdout line per job event (submit, completed, failed, canceled). The gate is exactly `1`. `true`, `yes`, and `on` stay silent. The line never includes the job payload.
+
 ### Troubleshooting
 
 - **"no CUDA device" / the backend never goes LIVE:** the container can't see your GPU. Install the
