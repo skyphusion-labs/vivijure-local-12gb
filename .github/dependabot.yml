@@ -30,8 +30,10 @@ updates:
       # imageio 2.38.1 requires Python >=3.11. deploy/runtime.Dockerfile is
       # nvidia/cuda:12.4.1-runtime-ubuntu22.04, which ships Python 3.10, so
       # pip hides that release and the smoke build fails.
+      # 2.38.x is not a pip version requirement, so Dependabot rejected the
+      # file (#/updates/1/ignore/5/versions). ==2.38.* is that series.
       - dependency-name: "imageio"
-        versions: ["2.38.x"]
+        versions: ["==2.38.*"]
     groups:
       pip-minor-patch:
         patterns: ["*"]
