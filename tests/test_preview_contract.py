@@ -11,12 +11,15 @@ import pytest
 from vivijure_local.core.bundle import _safe_extract, build_prompt, extract_bundle, storyboard_from_dict
 from vivijure_local.core.contract import PreviewRequest, is_safe_bundle_key, is_safe_lora_key, keyframe_key_for
 from vivijure_local.preview_sdxl import (
+    KEYFRAME_ANIME,
+    KEYFRAME_PHOTOREAL,
     _ALLOWED_KEYFRAME_MODELS,
     _ensure_ip_adapter,
     _env_allowlisted,
     _stage_pretrained_loras,
     plan_shots,
     render_preview,
+    resolve_keyframe_model,
     tier_params,
 )
 
@@ -301,8 +304,17 @@ def test_env_allowlist_rejects_unknown_keyframe_model_override(monkeypatch):
     monkeypatch.setenv("VIVIJURE_KEYFRAME_MODEL", "evil/repo")
     with pytest.raises(ValueError, match="not allowlisted"):
         _env_allowlisted(
-            "VIVIJURE_KEYFRAME_MODEL", "SG161222/RealVisXL_V5.0", _ALLOWED_KEYFRAME_MODELS
+            "VIVIJURE_KEYFRAME_MODEL", KEYFRAME_PHOTOREAL, _ALLOWED_KEYFRAME_MODELS
         )
+
+
+def test_resolve_keyframe_model_maps_style_and_allowlisted_base():
+    assert resolve_keyframe_model(None) == KEYFRAME_PHOTOREAL
+    assert resolve_keyframe_model({"style": "anime"}) == KEYFRAME_ANIME
+    assert resolve_keyframe_model({"keyframe": {"style": "anime"}}) == KEYFRAME_ANIME
+    assert resolve_keyframe_model({"keyframe": {"base_model": KEYFRAME_ANIME}}) == KEYFRAME_ANIME
+    with pytest.raises(ValueError, match="not allowlisted"):
+        resolve_keyframe_model({"base_model": "evil/repo"})
 
 
 class _FakePipe:
