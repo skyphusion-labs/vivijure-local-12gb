@@ -40,10 +40,10 @@ the matching doc.
 - `docs/proof/RESULTS.md` -- the validated fit/speed numbers from a 16GB Ada card.
 - `docs/RUN-LOG.md` -- the running build/validation log.
 - `deploy/runtime.Dockerfile` + `.github/workflows/runtime-build.yml` -- the heavy CUDA/torch/deps
-  RUNTIME BASE (tag `runtime-t<N>`) built rarely on the larger runner; `deploy/Dockerfile` is
+  RUNTIME BASE (tag `runtime-t<N>`) built rarely on GitHub-hosted `ubuntu-latest`; `deploy/Dockerfile` is
   `FROM runtime@digest` + COPY src so a src-only release is a thin, fast, cheap build.
-- `.github/workflows/runner-snapshot.yml` -- pre-pulls the runtime base into a custom runner image for
-  cache-warm publish builds (`local-12gb-bake-snap`, enterprise UI).
+- `.github/workflows/runner-snapshot.yml` -- retired (the job fails closed). It does not pre-pull a
+  runner image, and publish does not consume `local-12gb-bake-snapshot`.
 
 ## The job API (RunPod-compatible, `src/vivijure_local/core/server.py`)
 
@@ -111,8 +111,8 @@ before pushing; the card benchmark is the deliberate, costed step before claimin
 - Handle / username is `skyphusion` across all services.
 - **A producer stage never ships a fake clip.** The generation body raises a clear error when the GPU
   runtime is absent rather than faking output; tiers advertise only what a 12GB card honestly delivers.
-- Minimal runtime deps. The `requirements.txt` pins are SCAFFOLD pins; the exact validated version set
-  is fixed during the card benchmark (`docs/live-benchmark-plan.md`). torch/torchvision install from the
+- Minimal runtime deps. `requirements.txt` pins the validated set (diffusers 0.38.0, transformers
+  4.57.6, and the other exact pins in that file). torch/torchvision install from the
   CUDA index in `deploy/Dockerfile` (matched to the card), NOT pinned in `requirements.txt`.
 
 ## Crew + identity
@@ -121,8 +121,8 @@ before pushing; the card benchmark is the deliberate, costed step before claimin
   (loads their `$HOME`, their `~/dev/vivijure-local-12gb` clone, their gh / R2 creds). Commits and
   PRs land under the member's `skyphusion-<member>` identity, never Conrad's.
 - Operating memory for the vivijure family lives in the per-project memory under
-  `~/.claude/projects/-home-conrad-dev-vivijure/memory/` (`seg-vivijure-modules` covers the cost doors,
-  `seg-vivijure-backend-deploy` the cloud counterpart); load it before acting.
+  `~/.claude/projects/-home-conrad-dev-vivijure/memory/` (`seg-vivijure-pipeline` covers modules and
+  the local doors, `seg-vivijure-backend-deploy` the cloud counterpart); load it before acting.
 - **HARD AUP line:** the CSAM bright line is absolute. Non-negotiable.
 - **Ignore Cursor `AGENTS.md`.** Verify artifact not pipeline. Image pin discipline: versioned tags
   for GHCR/compose, not `:latest` as the only pin. Never freeze RunPod endpoint IDs (this door is
@@ -130,11 +130,11 @@ before pushing; the card benchmark is the deliberate, costed step before claimin
 
 ## Commits & versioning
 
-Conventional Commits (`feat(scope):`, `fix(scope):`, `docs:`); body explains the why. SemVer-style
-`0.MINOR.PATCH` while pre-1.0 (PATCH for fixes / backend tweaks, MINOR for features).
+Conventional Commits (`feat(scope):`, `fix(scope):`, `docs:`); body explains the why. SemVer on the
+1.x line (the shipped tag and `__version__` are 1.1.0; PATCH for fixes, MINOR for features).
 
 ## Release / deploy
 
 **Tag-gated production deploy.** Merges to `main` run CI only; they do not ship production.
 Cut an annotated SemVer tag on `main` to release (`git tag -a vX.Y.Z -m "..." && git push origin vX.Y.Z`).
-Deploy workflows assert the tag commit is an ancestor of `origin/main`.
+`runtime-build.yml` refuses a commit that is not an ancestor of `origin/main`. `publish.yml` (the `v*` tag image push) does not repeat that check.
