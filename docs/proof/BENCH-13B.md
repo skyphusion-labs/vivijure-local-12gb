@@ -4,7 +4,7 @@ Live LTX-Video i2v benchmark of the new tier->engine dispatch on real silicon, u
 hard **12GB VRAM allocator cap**. Outcome: the **13B-distilled `final` tier FITS a 12GB budget** with
 large headroom via sequential offload + VAE tiling, and is even faster per clip than `standard`
 (fewer distilled steps). `draft` + `standard` stay the PROVEN base 2B i2v. Raw artifacts:
-`bench-13b/benchmark-the retired homelab host.json` + `.md`, sample clips `bench-13b/sample_*.mp4`.
+`bench-13b/benchmark-ada-20gb.json` + `.md`, sample clips `bench-13b/sample_*.mp4`.
 
 ## The cap (how a 20GB card models a 12GB one)
 
@@ -71,7 +71,7 @@ sprint so the model choice is a decision, not a silent swap.
 
 ## Cost + hygiene
 
-One warm run of all three tiers on the free the retired homelab host lane ($0 GPU spend; no RunPod pod). Model
+One warm run of all three tiers on the free homelab lane ($0 GPU spend; no RunPod pod). Model
 downloads (base 2B + 0.9.7-distilled 13B + 0.9.8-13B-distilled + shared T5 text encoder) were staged to
 a scratch HF cache on the box and removed after this proof; the repo carries only the small artifacts
 here. Prod untouched.
