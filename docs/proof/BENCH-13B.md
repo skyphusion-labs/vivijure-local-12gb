@@ -4,11 +4,11 @@ Live LTX-Video i2v benchmark of the new tier->engine dispatch on real silicon, u
 hard **12GB VRAM allocator cap**. Outcome: the **13B-distilled `final` tier FITS a 12GB budget** with
 large headroom via sequential offload + VAE tiling, and is even faster per clip than `standard`
 (fewer distilled steps). `draft` + `standard` stay the PROVEN base 2B i2v. Raw artifacts:
-`bench-13b/benchmark-propagandhi.json` + `.md`, sample clips `bench-13b/sample_*.mp4`.
+`bench-13b/benchmark-the retired homelab host.json` + `.md`, sample clips `bench-13b/sample_*.mp4`.
 
 ## The cap (how a 20GB card models a 12GB one)
 
-The benchmark ran on **propagandhi** (RTX 4000 SFF Ada Generation, 19.55 GB usable), the free GPU
+The benchmark ran on **the retired homelab host** (RTX 4000 SFF Ada Generation, 19.55 GB usable), the free GPU
 verify lane, inside the repo's own runtime image (built from `deploy/Dockerfile`: torch 2.5.1+cu124,
 diffusers 0.38.0, transformers 4.57.6). `scripts/benchmark.py --cap-gb 12` pins
 `torch.cuda.set_per_process_memory_fraction(12 / 19.55) = 0.6138` on the device BEFORE any model loads,
@@ -71,7 +71,7 @@ sprint so the model choice is a decision, not a silent swap.
 
 ## Cost + hygiene
 
-One warm run of all three tiers on the free propagandhi lane ($0 GPU spend; no RunPod pod). Model
+One warm run of all three tiers on the free the retired homelab host lane ($0 GPU spend; no RunPod pod). Model
 downloads (base 2B + 0.9.7-distilled 13B + 0.9.8-13B-distilled + shared T5 text encoder) were staged to
 a scratch HF cache on the box and removed after this proof; the repo carries only the small artifacts
 here. Prod untouched.
