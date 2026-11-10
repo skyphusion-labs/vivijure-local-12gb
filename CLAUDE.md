@@ -121,7 +121,7 @@ before pushing; the card benchmark is the deliberate, costed step before claimin
   (loads their `$HOME`, their `~/dev/vivijure-local-12gb` clone, their gh / R2 creds). Commits and
   PRs land under the member's `skyphusion-<member>` identity, never Conrad's.
 - Operating memory for the vivijure family lives in the per-project memory under
-  `~/.claude/projects/-home-conrad-dev-vivijure/memory/` (`seg-vivijure-pipeline` covers modules and
+  `/Users/conrad/.claude/projects/-Users-conrad-dev/memory/` (`seg-vivijure-pipeline` covers modules and
   the local doors, `seg-vivijure-backend-deploy` the cloud counterpart); load it before acting.
 - **HARD AUP line:** the CSAM bright line is absolute. Non-negotiable.
 - **Ignore Cursor `AGENTS.md`.** Verify artifact not pipeline. Image pin discipline: versioned tags
