@@ -2,8 +2,7 @@
 
 The **local-consumer** render backend for Vivijure: image-to-video on a **single consumer GPU** (a
 **12GB floor, proven**; e.g. RTX 3060 12GB, RTX 4070, RTX 4070 Ti) running in your own homelab. The deliberate opposite of
-[vivijure-backend](https://github.com/skyphusion-labs/vivijure-backend) (the RunPod datacenter engine,
-Wan 2.2 on H200/B200).
+[vivijure-backend](https://github.com/skyphusion-labs/vivijure-backend) (the RunPod keyframe engine).
 
 **One studio, two honest doors.** The studio's `motion.backend` hook makes the clips engine pluggable.
 The control plane is unchanged; the user picks the door: rent datacenter GPU, or run it on silicon they
@@ -36,20 +35,18 @@ flowchart TD
 
     subgraph modules[Modules: one job each, opt-in]
         cloudmods[Cloud video modules<br/>Seedance, Kling, Veo, Wan, ...]
-        finishmods[Finish modules<br/>upscale, smooth, lip-sync, titles]
+        finishmods[Finish modules<br/>upscale, smooth, titles]
         audiomods[Audio modules<br/>music, narration]
     end
 
     subgraph gpu[The GPU render engines]
-        backend[vivijure-backend<br/>RunPod cloud GPU:<br/>keyframes, image-to-video, LoRA training]
+        backend[vivijure-backend<br/>RunPod cloud GPU:<br/>SDXL keyframes]
         local12[vivijure-local-12gb<br/>your own 12GB card LTX]
         local16[vivijure-local-16gb<br/>your own 16GB card CogVideoX]
     end
 
     subgraph finish[Finish helper engines]
-        musetalk[vivijure-musetalk<br/>lip-sync]
         upscale[vivijure-upscale<br/>video upscale]
-        audioup[vivijure-audio-upscale<br/>audio cleanup]
     end
 
     discord --> slate
@@ -58,10 +55,7 @@ flowchart TD
     studio --> cloudmods
     studio --> finishmods
     studio --> audiomods
-    cloudmods --> backend
-    finishmods --> musetalk
     finishmods --> upscale
-    audiomods --> audioup
     studio --> backend
     studio --> local12
     studio --> local16
@@ -118,7 +112,7 @@ Copy `.env.example` to `.env` and fill it in. Every setting is an environment va
 | Var | Required | Default | What it does |
 |---|---|---|---|
 | `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` | yes | -- | The one credential: the shared-R2 key (read the keyframe, write the clip). Scope it to the bucket. |
-| `R2_BUCKET` | no | `vivijure` | The shared bucket name. |
+| `R2_BUCKET` | **yes** | (`.env.example` sets `vivijure`) | The shared bucket name. The server refuses to start without it. For MinIO, also set `R2_S3_ENDPOINT` ([docs/CONFIGURATION.md](docs/CONFIGURATION.md)). |
 | `LOCAL_BACKEND_TOKEN` | no | auto-generated | The bearer token every i2v request must carry (the tunnel is public). Blank => a strong one is generated and printed in the banner; set it for a stable token across restarts. |
 | `TUNNEL_TOKEN` | no | quick tunnel | A Cloudflare named-tunnel token for a STABLE hostname (also needs the `docker-compose.override.yml` from HOMELABBER "A stable address"). Blank => a zero-config TryCloudflare quick tunnel (URL changes each restart). |
 | `VIVIJURE_MAX_VRAM_GB` | no | full card | Cap the VRAM vivijure claims, in GB, when you share the card with other workloads. The backend pins torch to that fraction of the card at startup. Blank (or a value >= your card's size) => use the whole card. |
@@ -166,7 +160,7 @@ peak flat, so the heavier base tier costs time, not VRAM.
 
 ## The job API (RunPod-compatible)
 
-A long-running server (`src/vivijure_local/server.py`) the `local-gpu` module talks to exactly as
+A long-running server (`src/vivijure_local/core/server.py`) the `local-gpu` module talks to exactly as
 `own-gpu` talks to RunPod:
 
 ```
@@ -211,7 +205,7 @@ no submitter identity.
 
 Homelab builders with a **12GB consumer GPU** (e.g. RTX 3060 12GB, RTX 4070) who want Vivijure image-to-video locally without RunPod rent.
 
-**Vivijure Studio:** https://vivijure.dev · **Live demo:** https://demo.vivijure.com · **Skyphusion Labs:** https://skyphusion.org
+**Vivijure Studio:** https://vivijure.dev · **Skyphusion Labs:** https://skyphusion.org
 
 ## Support
 
