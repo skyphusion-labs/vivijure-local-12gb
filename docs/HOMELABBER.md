@@ -192,17 +192,17 @@ Everything below is opt-in. You already have the thing working; this is room to 
 
 ### What you just did, and the honest trade-off
 
-You ran the **local door** -- rendering on hardware you own. The studio also has a **datacenter door**
-(rented top-end GPUs by the second). Both make films; the trade is real and we're upfront about it:
+You ran the **local door** -- rendering on hardware you own. The studio also has a **cloud motion door**
+(a rented model, paid per clip). Both make films; the trade is real and we're upfront about it:
 
-| | Local door (you) | Datacenter door |
+| | Local door (you) | Cloud motion door |
 |---|---|---|
-| Cost | **Free after hardware** (your power) | Pay per render second |
-| Hardware | your own 12GB+ card | H200 / B200 class |
-| Ceiling | ~768x512, ~5s clips (LTX-Video) | higher res / longer (Wan 2.2) |
-| Setup | one command on your box | nothing (it's hosted) |
+| Cost | **Free after hardware** (your power) | Pay per clip |
+| Hardware | your own 12GB+ card | none (the provider's) |
+| Ceiling | ~768x512, ~5s clips (LTX-Video) | depends on the model |
+| Setup | one command on your box | an API key in the studio |
 
-If you want maximum fidelity and don't mind paying, use the datacenter door. If you want to own your
+If you want a model your card cannot run and don't mind paying, use a cloud motion door. If you want to own your
 pipeline and render for the cost of electricity, you're in the right place.
 
 ### Quality tiers (what your card honestly delivers)
