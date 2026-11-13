@@ -371,6 +371,12 @@ def apply_vram_cap(logger=None, device=None) -> float | None:
                 f"{total_gb:.1f}GB is free at boot (another process holds the rest). Clamping the cap to "
                 f"{gb:.1f}GB."
             )
+        elif free_gb < requested_gb:
+            log(
+                f"WARNING: VIVIJURE_MAX_VRAM_GB requests {requested_gb:.1f}GB but only {free_gb:.1f}GB of "
+                f"{total_gb:.1f}GB is free at boot, below the {vram.FREE_HEADROOM_GB}GB headroom. Cap NOT "
+                f"clamped; the card is essentially full and this process will likely OOM."
+            )
         log(
             f"VRAM capped to {gb:.1f}GB ({fraction:.3f} of {total_gb:.1f}GB total; "
             f"requested {requested_gb:.1f}GB, {free_gb:.1f}GB free at boot)"

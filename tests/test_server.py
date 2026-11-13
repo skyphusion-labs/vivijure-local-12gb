@@ -91,6 +91,18 @@ def test_apply_vram_cap_clamps_to_free_and_warns_when_free_is_below_the_cap(monk
     assert any("requested 11.5GB, 8.0GB free at boot" in line for line in logs)
 
 
+def test_apply_vram_cap_warns_distinctly_when_the_card_is_essentially_full(monkeypatch):
+    monkeypatch.setenv("VIVIJURE_MAX_VRAM_GB", "11.5")
+    gib = 1024 ** 3
+    device = _FakeCuda(free_bytes=int(0.3 * gib), total_bytes=20 * gib)
+    logs = []
+    fraction = apply_vram_cap(logger=logs.append, device=device)
+    assert fraction == 11.5 / 20   # cannot clamp to nothing; requested cap stays
+    warnings = [line for line in logs if line.startswith("WARNING:")]
+    assert len(warnings) == 1
+    assert "NOT clamped" in warnings[0] and "OOM" in warnings[0] and "0.3GB" in warnings[0]
+
+
 def test_apply_vram_cap_logs_free_when_the_card_can_hold_the_cap(monkeypatch):
     monkeypatch.setenv("VIVIJURE_MAX_VRAM_GB", "11.5")
     gib = 1024 ** 3
