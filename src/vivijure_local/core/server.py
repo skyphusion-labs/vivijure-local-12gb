@@ -80,6 +80,9 @@ def route(
         grid = getattr(door, "DURATION_GRID", None)  # #707: door-declared duration grid; absent = no fixed grid
         if grid is not None:
             health["duration_grid"] = grid
+        from .. import preview_sdxl  # light module-level imports only; heavy deps stay deferred
+
+        health["keyframe_accel"] = preview_sdxl.keyframe_accel()  # local-12gb#129: hyper-sd | full-step | unknown
         return 200, health
 
     if method == "POST" and path == "/run":

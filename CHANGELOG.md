@@ -5,6 +5,9 @@ All notable changes to vivijure-local-12gb are recorded here. This project follo
 
 ## Unreleased
 
+- **fix:** Hyper-SD no longer silently full-step: `/health` reports `keyframe_accel` (`hyper-sd` | `full-step` |
+  `unknown`), the fallback log is a WARNING, and the thin-layer `peft` pin matches requirements.txt (0.21.2). v1.0.4
+  shipped with no `peft` at all (#129).
 - **fix:** `VIVIJURE_MAX_VRAM_GB` is clamped to FREE memory at boot (less 0.5GB headroom) with a WARNING naming
   requested, free and total GB; the startup line names the right denominators; docs say the cap bounds this
   process only (#138).

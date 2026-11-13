@@ -42,6 +42,9 @@ frames per tier with no fixed clip-length grid, so this door declares NO `durati
 `/health` (#707). Its absence tells the control plane "no declared clip-length constraint", so the studio
 does not preflight a fixed ceiling against this door.
 
+**`keyframe_accel` on `/health`.** `hyper-sd` (distill LoRA loaded), `full-step` (Hyper-SD unavailable; keyframes
+still render, slower) or `unknown` (no few-step keyframe pipe built yet in this process) (#129).
+
 ## Progress and status semantics (poll-only)
 
 There is **no sub-step progress channel**. `GET /status/<id>` returns only the RunPod-compatible
