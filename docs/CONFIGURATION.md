@@ -76,7 +76,10 @@ Copy `.env.example` to `.env` and fill these in. Only the R2 keys are required.
 - **What it is:** a cap, in gigabytes, on how much graphics memory (VRAM) this backend is allowed to use.
 - **Why:** if you share the card with something else (your desktop display, a game, another AI model),
   this stops the backend from grabbing the whole card. It pins the render to that fraction of the card at
-  startup.
+  startup. It bounds this backend only: it cannot stop another program taking memory later. At boot the
+  backend reads the card's FREE memory; if the cap is more than what is free, it clamps the cap to the free
+  amount (less 0.5GB) and logs a WARNING naming requested, free and total GB. That check sees only memory
+  taken BEFORE the backend started.
 - **Required?** No.
 - **Default:** blank, which means use the whole card.
 - **Example:** on a 12GB card, `VIVIJURE_MAX_VRAM_GB=11` leaves about 1GB for everything else. A number
