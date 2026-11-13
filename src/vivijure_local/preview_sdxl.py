@@ -90,6 +90,18 @@ DEFAULT_NEGATIVE = (
 _PIPE = None  # process-cached SDXL pipe (or None after unload)
 _PIPE_MODEL = None
 
+# Hyper-SD acceleration state, reported on GET /health as `keyframe_accel` so a full-step fallback is
+# visible to the operator and the studio, not only in container logs (local-12gb#129).
+ACCEL_UNKNOWN = "unknown"            # no few-step pipe built yet in this process
+ACCEL_HYPER_SD = "hyper-sd"          # distill LoRA loaded
+ACCEL_FULL_STEP = "full-step"        # Hyper-SD unavailable: LoRA load raised, keyframes render full-step
+_ACCEL = ACCEL_UNKNOWN
+
+
+def keyframe_accel() -> str:
+    """Current Hyper-SD state: unknown | hyper-sd | full-step (Hyper-SD unavailable)."""
+    return _ACCEL
+
 
 @dataclass(frozen=True)
 class PreviewTier:
@@ -146,9 +158,10 @@ def plan_shots(bundle: Bundle, process_shot_ids: list[str] | None) -> list[str]:
 
 def unload_preview() -> None:
     """Drop the cached SDXL pipe and free CUDA so i2v can claim the card."""
-    global _PIPE, _PIPE_MODEL
+    global _PIPE, _PIPE_MODEL, _ACCEL
     _PIPE = None
     _PIPE_MODEL = None
+    _ACCEL = ACCEL_UNKNOWN
     try:
         import torch
 
@@ -208,7 +221,7 @@ def _unload_i2v() -> None:
 
 def _get_pipe(few_step: bool, model: str = DEFAULT_MODEL):
     """Return a process-cached SDXL pipeline configured for the card."""
-    global _PIPE, _PIPE_MODEL
+    global _PIPE, _PIPE_MODEL, _ACCEL
     import torch
     from diffusers import StableDiffusionXLPipeline
 
@@ -224,8 +237,12 @@ def _get_pipe(few_step: bool, model: str = DEFAULT_MODEL):
         try:
             pipe.load_lora_weights(DISTILL_REPO, weight_name=DISTILL_WEIGHT, adapter_name="distill")
             pipe.set_adapters(["distill"], adapter_weights=[1.0])
+            _ACCEL = ACCEL_HYPER_SD
         except Exception as e:  # noqa: BLE001
-            print(f"preview_sdxl: Hyper-SD load failed ({e}); full-step only", flush=True)
+            # Soft degrade on purpose (keyframes still render), but loud: WARNING line + /health field.
+            _ACCEL = ACCEL_FULL_STEP
+            print(f"preview_sdxl: WARNING Hyper-SD unavailable ({e}); keyframes render FULL-STEP "
+                  "(slow); /health keyframe_accel=full-step", flush=True)
 
     if torch.cuda.is_available():
         # sequential offload keeps RealVisXL under a 12GB ceiling alongside residual allocator state
