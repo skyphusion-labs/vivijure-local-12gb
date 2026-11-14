@@ -92,8 +92,8 @@ _PIPE_MODEL = None
 
 # Hyper-SD acceleration state, reported on GET /health as `keyframe_accel` so a full-step fallback is
 # visible to the operator and the studio, not only in container logs (local-12gb#129).
-ACCEL_UNKNOWN = "unknown"            # no few-step pipe built yet in this process
-ACCEL_HYPER_SD = "hyper-sd"          # distill LoRA loaded
+ACCEL_UNKNOWN = "unknown"            # no preview pipe built yet in this process
+ACCEL_HYPER_SD = "hyper-sd"          # distill LoRA loaded (used by few-step tiers; final runs it at weight 0)
 ACCEL_FULL_STEP = "full-step"        # Hyper-SD unavailable: LoRA load raised, keyframes render full-step
 _ACCEL = ACCEL_UNKNOWN
 
@@ -219,13 +219,31 @@ def _unload_i2v() -> None:
         pass
 
 
+def _set_distill(pipe, few_step: bool) -> None:
+    """Per-job Hyper-SD switch on the cached pipe (local-12gb#190).
+
+    The distill adapter is loaded once at build, whatever the first job's tier. Each job then sets its
+    weight via set_adapters (diffusers 0.38.0 PeftAdapterMixin.set_adapters(adapter_names, adapter_weights)):
+    1.0 for few-step tiers, 0.0 for final so the full-step run is plain SDXL. No-op when the load failed."""
+    if not getattr(pipe, "_vj_distill_loaded", False):
+        return
+    weight = 1.0 if few_step else 0.0
+    pipe.set_adapters(["distill"], adapter_weights=[weight])
+    pipe._vj_distill_weight = weight
+
+
 def _get_pipe(few_step: bool, model: str = DEFAULT_MODEL):
-    """Return a process-cached SDXL pipeline configured for the card."""
+    """Return a process-cached SDXL pipeline configured for the card.
+
+    One pipe per model. The Hyper-SD distill LoRA is attached at build regardless of tier and switched
+    per job by _set_distill, so build order (final-first or draft-first) cannot change what a later job
+    gets (local-12gb#190). Keying the cache on few_step instead would hold two SDXL pipes resident."""
     global _PIPE, _PIPE_MODEL, _ACCEL
     import torch
     from diffusers import StableDiffusionXLPipeline
 
     if _PIPE is not None and _PIPE_MODEL == model:
+        _set_distill(_PIPE, few_step)
         return _PIPE
     if _PIPE is not None:
         unload_preview()
@@ -233,16 +251,18 @@ def _get_pipe(few_step: bool, model: str = DEFAULT_MODEL):
     dtype = torch.bfloat16 if torch.cuda.is_available() else torch.float32
     pipe = StableDiffusionXLPipeline.from_pretrained(model, torch_dtype=dtype)
     pipe._vj_ip_loaded = 0
-    if few_step:
-        try:
-            pipe.load_lora_weights(DISTILL_REPO, weight_name=DISTILL_WEIGHT, adapter_name="distill")
-            pipe.set_adapters(["distill"], adapter_weights=[1.0])
-            _ACCEL = ACCEL_HYPER_SD
-        except Exception as e:  # noqa: BLE001
-            # Soft degrade on purpose (keyframes still render), but loud: WARNING line + /health field.
-            _ACCEL = ACCEL_FULL_STEP
-            print(f"preview_sdxl: WARNING Hyper-SD unavailable ({e}); keyframes render FULL-STEP "
-                  "(slow); /health keyframe_accel=full-step", flush=True)
+    pipe._vj_distill_loaded = False
+    pipe._vj_distill_weight = 0.0
+    try:
+        pipe.load_lora_weights(DISTILL_REPO, weight_name=DISTILL_WEIGHT, adapter_name="distill")
+        pipe._vj_distill_loaded = True
+        _set_distill(pipe, few_step)
+        _ACCEL = ACCEL_HYPER_SD
+    except Exception as e:  # noqa: BLE001
+        # Soft degrade on purpose (keyframes still render), but loud: WARNING line + /health field.
+        _ACCEL = ACCEL_FULL_STEP
+        print(f"preview_sdxl: WARNING Hyper-SD unavailable ({e}); keyframes render FULL-STEP "
+              "(slow); /health keyframe_accel=full-step", flush=True)
 
     if torch.cuda.is_available():
         # sequential offload keeps RealVisXL under a 12GB ceiling alongside residual allocator state
@@ -270,9 +290,11 @@ def _bind_pretrained_loras(pipe, staged: dict[str, Path]) -> list[str]:
             raise RuntimeError(f"preview_sdxl: LoRA {slot} load failed ({e})") from e
     if names:
         try:
-            # keep distill if present
-            active = list(getattr(pipe, "get_active_adapters", lambda: [])() or [])
-            weights = [1.0] * len(active)
+            # keep distill at this job's weight (1.0 few-step, 0.0 final; see _set_distill)
+            active, weights = [], []
+            if getattr(pipe, "_vj_distill_loaded", False):
+                active.append("distill")
+                weights.append(getattr(pipe, "_vj_distill_weight", 1.0))
             for n in names:
                 if n not in active:
                     active.append(n)

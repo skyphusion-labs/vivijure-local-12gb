@@ -5,6 +5,7 @@ All notable changes to vivijure-local-12gb are recorded here. This project follo
 
 ## Unreleased
 
+- **fix:** the cached SDXL preview pipe always loads the Hyper-SD distill LoRA and switches it per job (weight 1.0 draft/standard, 0.0 final), so a first `final` preview no longer leaves later draft/standard jobs full-step and `keyframe_accel` `unknown` (#190).
 - **fix:** Hyper-SD no longer silently full-step: `/health` reports `keyframe_accel` (`hyper-sd` | `full-step` |
   `unknown`), the fallback log is a WARNING, and the thin-layer `peft` pin matches requirements.txt (0.21.2). v1.0.4
   shipped with no `peft` at all (#129).
